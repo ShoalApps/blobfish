@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <color name="window_bg">#FFFFF8F8</color>
+    <color name="window_bg">#FFF8F9FF</color>
     <style name="Theme.Social" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/window_bg</item>
         <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/window_bg</item>
