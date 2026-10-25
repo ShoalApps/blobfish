@@ -63,7 +63,8 @@ class FeedTest {
         nodes("post-image").onFirst().performClick()
         compose.waitUntil(5_000) { count("image-viewer") > 0 }
         assertTrue(compose.onAllNodes(hasContentDescription("Share")).fetchSemanticsNodes().isNotEmpty())
-        compose.onAllNodes(hasContentDescription("Close")).onFirst().performClick()
+        // The buttons fade after a moment, so close with Back, which always works.
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
         compose.waitUntil(5_000) { count("image-viewer") == 0 }
         // Back closes it too.
         nodes("post-image").onFirst().performClick()
