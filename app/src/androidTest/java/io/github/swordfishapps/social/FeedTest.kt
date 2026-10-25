@@ -1,4 +1,4 @@
-package io.github.tintloom.social
+package io.github.swordfishapps.social
 
 import androidx.compose.ui.test.SemanticsNodeInteractionCollection
 import androidx.compose.ui.test.hasContentDescription

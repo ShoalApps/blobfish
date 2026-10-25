@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Tintloom mauve; Android 12+ swaps these for wallpaper colours (values-v31). -->
-    <color name="icon_bg">#FFFFD9E3</color>
-    <color name="icon_shape">#FF8B4A61</color>
+    <!-- Swordfish blue; Android 12+ swaps these for wallpaper colours (values-v31). -->
+    <color name="icon_bg">#FFD2E4FF</color>
+    <color name="icon_shape">#FF36618E</color>
     <color name="icon_glyph">#FFFFFFFF</color>
 </resources>

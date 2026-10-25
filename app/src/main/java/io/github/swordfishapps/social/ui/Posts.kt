@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.tintloom.social.ui
+package io.github.swordfishapps.social.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -48,7 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import io.github.tintloom.social.data.Moderation
+import io.github.swordfishapps.social.data.Moderation
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -87,13 +87,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import io.github.tintloom.social.Graph
-import io.github.tintloom.social.data.Author
-import io.github.tintloom.social.data.Post
-import io.github.tintloom.social.data.RichText
-import io.github.tintloom.social.data.compact
-import io.github.tintloom.social.data.shortAgo
-import io.github.tintloom.social.data.webUrl
+import io.github.swordfishapps.social.Graph
+import io.github.swordfishapps.social.data.Author
+import io.github.swordfishapps.social.data.Post
+import io.github.swordfishapps.social.data.RichText
+import io.github.swordfishapps.social.data.compact
+import io.github.swordfishapps.social.data.shortAgo
+import io.github.swordfishapps.social.data.webUrl
 import kotlinx.coroutines.launch
 
 /** Where links inside posts lead. */
@@ -351,7 +351,7 @@ private fun Images(post: Post, modifier: Modifier) {
 }
 
 @Composable
-private fun LinkCardView(card: io.github.tintloom.social.data.LinkCard, modifier: Modifier) {
+private fun LinkCardView(card: io.github.swordfishapps.social.data.LinkCard, modifier: Modifier) {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(16.dp),

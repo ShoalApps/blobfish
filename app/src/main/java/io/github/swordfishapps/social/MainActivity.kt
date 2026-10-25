@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.tintloom.social
+package io.github.swordfishapps.social
 
 import android.content.Intent
 import android.net.Uri
@@ -64,19 +64,19 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import io.github.tintloom.social.data.Post
-import io.github.tintloom.social.ui.Composer
-import io.github.tintloom.social.ui.HomeScreen
-import io.github.tintloom.social.ui.Nav
-import io.github.tintloom.social.ui.NotificationsScreen
-import io.github.tintloom.social.ui.ProfileScreen
-import io.github.tintloom.social.ui.SearchScreen
-import io.github.tintloom.social.ui.SettingsScreen
-import io.github.tintloom.social.ui.ModerationScreen
-import io.github.tintloom.social.ui.SignInScreen
-import io.github.tintloom.social.ui.SocialTheme
-import io.github.tintloom.social.ui.ThreadScreen
-import io.github.tintloom.social.ui.YouScreen
+import io.github.swordfishapps.social.data.Post
+import io.github.swordfishapps.social.ui.Composer
+import io.github.swordfishapps.social.ui.HomeScreen
+import io.github.swordfishapps.social.ui.Nav
+import io.github.swordfishapps.social.ui.NotificationsScreen
+import io.github.swordfishapps.social.ui.ProfileScreen
+import io.github.swordfishapps.social.ui.SearchScreen
+import io.github.swordfishapps.social.ui.SettingsScreen
+import io.github.swordfishapps.social.ui.ModerationScreen
+import io.github.swordfishapps.social.ui.SignInScreen
+import io.github.swordfishapps.social.ui.SocialTheme
+import io.github.swordfishapps.social.ui.ThreadScreen
+import io.github.swordfishapps.social.ui.YouScreen
 
 private data class Tab(val route: String, val label: String, val on: ImageVector, val off: ImageVector)
 
@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        SwordfishNotice.show(this)
+        DataMover.offerUninstall(this)
         enableEdgeToEdge()
         link.value = intent?.data
         Graph.checkForUpdate()
@@ -215,7 +215,7 @@ private fun UpdatePrompt(modifier: Modifier) {
     val message = Graph.Update.message
     LaunchedEffect(available) {
         if (available == null) return@LaunchedEffect
-        val r = host.showSnackbar("A new version of Tintloom Social is ready", actionLabel = "Update", withDismissAction = true, duration = SnackbarDuration.Indefinite)
+        val r = host.showSnackbar("A new version of Swordfish Social is ready", actionLabel = "Update", withDismissAction = true, duration = SnackbarDuration.Indefinite)
         if (r == SnackbarResult.ActionPerformed) Graph.installUpdate() else Graph.Update.available = null
     }
     LaunchedEffect(message) {

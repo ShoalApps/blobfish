@@ -6,15 +6,21 @@
     <!-- Installing updates downloaded from the project's GitHub releases; Android always asks first. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Tintloom Manager takes over updates when it is installed. -->
+    <!-- Swordfish Manager takes over updates when it is installed. -->
     <queries>
-        <package android:name="io.github.tintloom.manager" />
+        <package android:name="io.github.swordfishapps.manager" />
     </queries>
 
-    <!-- Only apps signed with the same key may read the hand-off below. -->
+    <!-- Reading the Tintloom version's data once, after the rename. Signature-only: both apps share the release key. -->
     <permission
         android:name="io.github.swordfishapps.permission.MOVE_DATA"
         android:protectionLevel="signature" />
+    <uses-permission android:name="io.github.swordfishapps.permission.MOVE_DATA" />
+    <queries>
+        <provider android:authorities="io.github.tintloom.social.movedata" />
+        <provider android:authorities="io.github.tintloom.social.debug.movedata" />
+        <package android:name="io.github.tintloom.social" />
+    </queries>
 
     <application
         android:name=".SocialApp"
@@ -47,11 +53,5 @@
         <receiver
             android:name=".data.InstallResultReceiver"
             android:exported="false" />
-        <!-- Hands settings and sign-ins to the Swordfish version of this app (new package name). -->
-        <provider
-            android:name=".LegacyExport"
-            android:authorities="${applicationId}.movedata"
-            android:exported="true"
-            android:permission="io.github.swordfishapps.permission.MOVE_DATA" />
     </application>
 </manifest>

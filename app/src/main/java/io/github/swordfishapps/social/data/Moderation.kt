@@ -1,4 +1,4 @@
-package io.github.tintloom.social.data
+package io.github.swordfishapps.social.data
 
 import kotlinx.serialization.Serializable
 import java.time.Instant

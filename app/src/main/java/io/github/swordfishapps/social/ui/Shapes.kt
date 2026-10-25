@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.tintloom.social.ui
+package io.github.swordfishapps.social.ui
 
 import android.graphics.Matrix
 import android.graphics.RectF

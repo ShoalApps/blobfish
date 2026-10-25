@@ -1,4 +1,4 @@
-package io.github.tintloom.social.ui
+package io.github.swordfishapps.social.ui
 
 import android.app.DownloadManager
 import android.content.Context
@@ -60,7 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
-import io.github.tintloom.social.data.Image
+import io.github.swordfishapps.social.data.Image
 
 /**
  * A post's photos full screen: swipe between them, pinch or double-tap to zoom, tap to hide the
@@ -211,13 +211,13 @@ private fun share(context: Context, url: String) {
     runCatching { context.startActivity(Intent.createChooser(send, null)) }
 }
 
-/** Saves to Pictures/Tintloom through the system downloader, which needs no storage permission. */
+/** Saves to Pictures/Swordfish through the system downloader, which needs no storage permission. */
 private fun save(context: Context, url: String) {
     val name = "bluesky-" + url.substringAfterLast('/').substringBefore('@').takeLast(16) + ".jpg"
     val request = DownloadManager.Request(Uri.parse(url))
         .setTitle(name)
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        .setDestinationInExternalPublicDir(Environment.DIRECTORY_PICTURES, "Tintloom/$name")
+        .setDestinationInExternalPublicDir(Environment.DIRECTORY_PICTURES, "Swordfish/$name")
     runCatching {
         (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
         toast(context, "Saving to Pictures")

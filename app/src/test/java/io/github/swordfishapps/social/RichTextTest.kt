@@ -1,7 +1,7 @@
-package io.github.tintloom.social
+package io.github.swordfishapps.social
 
-import io.github.tintloom.social.data.RichText
-import io.github.tintloom.social.data.RichText.Facet
+import io.github.swordfishapps.social.data.RichText
+import io.github.swordfishapps.social.data.RichText.Facet
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -84,10 +84,10 @@ class RichTextTest {
     }
 
     @Test fun detectsLinksMentionsAndTagsInDrafts() {
-        val found = RichText.detect("hi @bob.bsky.social see https://tintloom.github.io. #android #1")
+        val found = RichText.detect("hi @bob.bsky.social see https://swordfishapps.github.io. #android #1")
         assertEquals(listOf(Facet.Kind.MENTION, Facet.Kind.LINK, Facet.Kind.TAG), found.map { it.kind })
         assertEquals("bob.bsky.social", found[0].value)
-        assertEquals("https://tintloom.github.io", found[1].value)
+        assertEquals("https://swordfishapps.github.io", found[1].value)
         assertEquals("android", found[2].value)
     }
 }

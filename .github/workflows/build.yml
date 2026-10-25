@@ -21,25 +21,25 @@ jobs:
 
       - name: Unpack the release signing key
         env:
-          KEYSTORE_BASE64: ${{ secrets.TINTLOOM_KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.SWORDFISH_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "TINTLOOM_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "SWORDFISH_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           fi
 
       - name: Build release APK and run unit tests
         env:
-          TINTLOOM_KEYSTORE_PASSWORD: ${{ secrets.TINTLOOM_KEYSTORE_PASSWORD }}
-          TINTLOOM_KEY_ALIAS: ${{ secrets.TINTLOOM_KEY_ALIAS }}
+          SWORDFISH_KEYSTORE_PASSWORD: ${{ secrets.SWORDFISH_KEYSTORE_PASSWORD }}
+          SWORDFISH_KEY_ALIAS: ${{ secrets.SWORDFISH_KEY_ALIAS }}
         run: ./gradlew assembleRelease testDebugUnitTest --stacktrace
 
       - name: Publish release
-        run: cp app/build/outputs/apk/release/app-release.apk TintloomSocial.apk
+        run: cp app/build/outputs/apk/release/app-release.apk SwordfishSocial.apk
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: build-${{ github.run_number }}
-          name: Tintloom Social build ${{ github.run_number }}
-          body: Install TintloomSocial.apk below. Tintloom Social is free software under the GPL-3.0 and is not affiliated with Bluesky Social PBC.
-          files: TintloomSocial.apk
+          name: Swordfish Social build ${{ github.run_number }}
+          body: Install SwordfishSocial.apk below. Swordfish Social is free software under the GPL-3.0 and is not affiliated with Bluesky Social PBC.
+          files: SwordfishSocial.apk
           make_latest: true

@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.tintloom.social.ui
+package io.github.swordfishapps.social.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.animateFloat
@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -89,19 +90,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
-import io.github.tintloom.social.Graph
-import io.github.tintloom.social.data.Moderation
-import io.github.tintloom.social.data.AtpException
-import io.github.tintloom.social.data.Author
-import io.github.tintloom.social.data.FeedItem
-import io.github.tintloom.social.data.Notification
-import io.github.tintloom.social.data.Page
-import io.github.tintloom.social.data.Post
-import io.github.tintloom.social.data.Profile
-import io.github.tintloom.social.data.Thread
-import io.github.tintloom.social.data.ThreadNode
-import io.github.tintloom.social.data.compact
-import io.github.tintloom.social.data.shortAgo
+import io.github.swordfishapps.social.Graph
+import io.github.swordfishapps.social.data.Moderation
+import io.github.swordfishapps.social.data.AtpException
+import io.github.swordfishapps.social.data.Author
+import io.github.swordfishapps.social.data.FeedItem
+import io.github.swordfishapps.social.data.Notification
+import io.github.swordfishapps.social.data.Page
+import io.github.swordfishapps.social.data.Post
+import io.github.swordfishapps.social.data.Profile
+import io.github.swordfishapps.social.data.Thread
+import io.github.swordfishapps.social.data.ThreadNode
+import io.github.swordfishapps.social.data.compact
+import io.github.swordfishapps.social.data.shortAgo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -219,13 +220,15 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
     }
 }
 
-/** "Tintloom Social" with the app's cookie mark. */
+/** "Swordfish" with the swordfish on the app's cookie mark. */
 @Composable
 fun Wordmark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val shape = remember { PolygonShape(MaterialShapes.Cookie12Sided) }
-        Box(Modifier.size(28.dp).clip(shape).background(MaterialTheme.colorScheme.primary))
-        Text("Tintloom", style = MaterialTheme.typography.titleLargeEmphasized, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = 8.dp))
+        Box(Modifier.size(30.dp).clip(shape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+            Icon(androidx.compose.ui.res.painterResource(io.github.swordfishapps.social.R.drawable.ic_launcher_mono), null, Modifier.requiredSize(50.dp), tint = MaterialTheme.colorScheme.onPrimary)
+        }
+        Text("Swordfish", style = MaterialTheme.typography.titleLargeEmphasized, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -477,7 +480,7 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
     }
 }
 
-/** The profile picture in a slowly morphing, turning Material shape, like Tintloom Video's About page. */
+/** The profile picture in a slowly morphing, turning Material shape, like Swordfish Video's About page. */
 @Composable
 fun MorphingAvatar(url: String?, size: androidx.compose.ui.unit.Dp) {
     val morph = remember { androidx.graphics.shapes.Morph(MaterialShapes.Cookie12Sided, MaterialShapes.Clover8Leaf) }
@@ -711,16 +714,16 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 row { sh -> Link("Moderation", "Content filters, muted words, hidden posts, muted accounts, replies and reposts", sh, onModeration) }
             }
             group("Updates") {
-                if (io.github.tintloom.social.TintloomManager.installed(context)) {
-                    row { sh -> Link("Managed by Tintloom Manager", "Updates are checked and installed by Tintloom Manager", sh) { io.github.tintloom.social.TintloomManager.checkForUpdates(context) } }
+                if (io.github.swordfishapps.social.SwordfishManager.installed(context)) {
+                    row { sh -> Link("Managed by Swordfish Manager", "Updates are checked and installed by Swordfish Manager", sh) { io.github.swordfishapps.social.SwordfishManager.checkForUpdates(context) } }
                 } else {
                     row { sh -> Toggle("Check for updates", "Look for a new version on GitHub once a day", s.autoUpdate, sh) { v -> store.updateSettings { it.copy(autoUpdate = v) } } }
                 }
-                row { sh -> Link("Check for updates now", "Version $version · opens Tintloom Manager", sh) { io.github.tintloom.social.TintloomManager.checkForUpdates(context) } }
+                row { sh -> Link("Check for updates now", "Version $version · opens Swordfish Manager", sh) { io.github.swordfishapps.social.SwordfishManager.checkForUpdates(context) } }
             }
             group("About") {
-                row { sh -> Link("Source code", "github.com/Tintloom/social", sh) { openLink(context, "https://github.com/Tintloom/social") } }
-                row { sh -> Link("Tintloom", "tintloom.github.io: all the apps and their credits", sh) { openLink(context, "https://tintloom.github.io") } }
+                row { sh -> Link("Source code", "github.com/SwordfishApps/social", sh) { openLink(context, "https://github.com/SwordfishApps/social") } }
+                row { sh -> Link("Swordfish", "swordfishapps.github.io: all the apps and their credits", sh) { openLink(context, "https://swordfishapps.github.io") } }
                 row { sh ->
                     Link("GNU GPL v3 or later", "Free software. Not affiliated with or endorsed by Bluesky Social PBC.", sh) {
                         openLink(context, "https://www.gnu.org/licenses/gpl-3.0.html")

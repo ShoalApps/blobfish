@@ -1,4 +1,4 @@
-package io.github.tintloom.social
+package io.github.swordfishapps.social
 
 import android.app.Application
 import androidx.compose.runtime.getValue
@@ -10,10 +10,10 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
-import io.github.tintloom.social.data.Atp
-import io.github.tintloom.social.data.Moderation
-import io.github.tintloom.social.data.Store
-import io.github.tintloom.social.data.Updater
+import io.github.swordfishapps.social.data.Atp
+import io.github.swordfishapps.social.data.Moderation
+import io.github.swordfishapps.social.data.Store
+import io.github.swordfishapps.social.data.Updater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit
 class SocialApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
+        DataMover.run(this)
         Graph.app = this
         Graph.syncModeration()
         Graph.syncProfile()
@@ -46,7 +47,7 @@ object Graph {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", "TintloomSocial/0.1 (Android)").build()) }
+            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", "SwordfishSocial/0.1 (Android)").build()) }
             .build()
     }
     val store by lazy { Store(app) }
@@ -98,8 +99,8 @@ object Graph {
     }
 
     fun checkForUpdate(force: Boolean = false) {
-        // Tintloom Manager handles updates when it is installed.
-        if (!force && io.github.tintloom.social.TintloomManager.installed(app)) return
+        // Swordfish Manager handles updates when it is installed.
+        if (!force && io.github.swordfishapps.social.SwordfishManager.installed(app)) return
         if (!Updater.canUpdate(app)) {
             if (force) Update.message = "Development builds don't update themselves"
             return

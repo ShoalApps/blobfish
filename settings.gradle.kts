@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TintloomSocial"
+rootProject.name = "SwordfishSocial"
 include(":app")

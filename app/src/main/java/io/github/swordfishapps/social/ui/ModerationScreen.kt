@@ -1,4 +1,4 @@
-package io.github.tintloom.social.ui
+package io.github.swordfishapps.social.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,9 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import io.github.tintloom.social.Graph
-import io.github.tintloom.social.data.Author
-import io.github.tintloom.social.data.Moderation
+import io.github.swordfishapps.social.Graph
+import io.github.swordfishapps.social.data.Author
+import io.github.swordfishapps.social.data.Moderation
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
