@@ -281,7 +281,7 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             }
         },
     ) { pad ->
-        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentPadding = PaddingValues(bottom = 96.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
             when {
                 vm.loading -> item { CenterLoading() }
                 tab == 0 && vm.error != null -> item { Message(vm.error!!) }
@@ -371,7 +371,7 @@ fun ThreadScreen(uri: String, nav: Nav, onBack: () -> Unit) {
         contentWindowInsets = WindowInsets(0),
         topBar = { TopAppBar(title = { Text("Post") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } }) },
     ) { pad ->
-        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentPadding = PaddingValues(bottom = 96.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
             val t = vm.thread
             when {
                 vm.error != null -> item { Message(vm.error!!, "Try again") { vm.load() } }
@@ -676,7 +676,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit) {
         contentWindowInsets = WindowInsets(0),
         topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } }) },
     ) { pad ->
-        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentPadding = PaddingValues(bottom = 96.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
             group("Account") {
                 val sess = session
                 if (sess != null) {

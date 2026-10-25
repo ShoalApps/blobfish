@@ -262,7 +262,7 @@ private fun Images(post: Post, modifier: Modifier) {
             model = i.thumb,
             contentDescription = i.alt.ifBlank { null },
             contentScale = ContentScale.Crop,
-            modifier = modifier.fillMaxWidth().aspectRatio((i.aspect ?: 1.5f).coerceIn(.75f, 2f)).clip(shape)
+            modifier = modifier.fillMaxWidth().heightIn(max = 520.dp).aspectRatio((i.aspect ?: 1.5f).coerceIn(.75f, 2f)).clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { openLink(context, i.full) },
         )
         return
