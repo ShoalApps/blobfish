@@ -48,6 +48,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.withStyle
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Verified
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import io.github.swordfishapps.social.data.Moderation
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenuItem
@@ -120,7 +127,7 @@ fun Avatar(url: String?, size: Dp, modifier: Modifier = Modifier) {
 
 /** A post's text with mu-style formatting: paragraphs with facets and markdown, and highlighted code blocks. */
 @Composable
-fun RichTextView(text: String, facets: List<RichText.Facet>, nav: Nav, maxLines: Int = Int.MAX_VALUE) {
+fun RichTextView(text: String, facets: List<RichText.Facet>, nav: Nav, maxLines: Int = Int.MAX_VALUE, large: Boolean = false) {
     val markdown = Graph.store.settings.collectAsState().value.richFormatting
     val blocks = remember(text, facets, markdown) { RichText.parse(text, facets, markdown) }
     val linkColor = MaterialTheme.colorScheme.primary
@@ -149,7 +156,7 @@ fun RichTextView(text: String, facets: List<RichText.Facet>, nav: Nav, maxLines:
                             }
                         }
                     }
-                    Text(annotated, style = MaterialTheme.typography.bodyLarge, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+                    Text(annotated, style = if (large) MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 26.sp) else MaterialTheme.typography.bodyLarge, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
                 }
                 is RichText.Code -> CodeBlock(b, context)
             }
@@ -210,6 +217,9 @@ fun PostCard(
     big: Boolean = false,
     /** In threads a hidden post leaves a note, so the conversation still makes sense. */
     noteWhenHidden: Boolean = false,
+    /** Bluesky's thread line, joining this post's avatar to the post above and/or below. */
+    lineAbove: Boolean = false,
+    lineBelow: Boolean = false,
 ) {
     val prefs by Graph.store.moderation.collectAsState()
     val signedIn = Graph.store.session.collectAsState().value != null
@@ -229,7 +239,18 @@ fun PostCard(
     }
     val covered = decision is Moderation.Decision.Warn && !revealed
     val blurMedia = decision is Moderation.Decision.BlurMedia && !revealed
-    Column(modifier.fillMaxWidth().clickable(enabled = !big && !covered) { nav.post(post.uri) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    val lineColor = MaterialTheme.colorScheme.outlineVariant
+    Column(
+        modifier.fillMaxWidth().clickable(enabled = !big && !covered) { nav.post(post.uri) }
+            .drawBehind {
+                // Centre of the 40dp avatar, 16dp in; the avatar spans 12dp to 52dp from the top.
+                val x = 36.dp.toPx()
+                val w = 2.dp.toPx()
+                if (lineAbove) drawRect(lineColor, Offset(x - w / 2, 0f), Size(w, 10.dp.toPx()))
+                if (lineBelow) drawRect(lineColor, Offset(x - w / 2, 54.dp.toPx()), Size(w, size.height - 54.dp.toPx()))
+            }
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (lineBelow) 4.dp else 12.dp),
+    ) {
         repostedBy?.let {
             Row(Modifier.padding(start = 46.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Repeat, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -241,6 +262,7 @@ fun PostCard(
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(post.author.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    VerifiedBadge(post.author, 15.dp)
                     Text(
                         " @${post.author.handle} · ${shortAgo(post.createdAt)}",
                         style = MaterialTheme.typography.bodyMedium,
@@ -250,7 +272,11 @@ fun PostCard(
                     )
                 }
                 replyTo?.let {
-                    Text("Replying to @${it.handle}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Bluesky's reply line: a small arrow and the name, under the author's name.
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
+                        Icon(Icons.AutoMirrored.Rounded.Reply, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Reply to ${it.name}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
+                    }
                 }
                 if (covered) {
                     ContentCover((decision as Moderation.Decision.Warn).reason, Modifier.padding(top = 8.dp)) { revealed = true }
@@ -267,39 +293,133 @@ fun PostCard(
                     if (post.images.isNotEmpty()) Images(post, Modifier.padding(top = 10.dp))
                     post.card?.let { LinkCardView(it, Modifier.padding(top = 10.dp)) }
                 }
-                post.quote?.let { q ->
-                    val quoteDecision = remember(q, prefs, signedIn) { Moderation.decide(q, prefs, signedIn) }
-                    if (quoteDecision is Moderation.Decision.Hide) {
-                        Text(
-                            "Quoted post hidden: ${quoteDecision.reason}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 10.dp).fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)).padding(12.dp),
-                        )
-                        return@let
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.Transparent,
-                        modifier = Modifier.padding(top = 10.dp).fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).clickable { nav.post(q.uri) },
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(q.author.avatar, 20.dp)
-                                Text(q.author.name, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            if (quoteDecision is Moderation.Decision.Warn) Text("Content warning: ${quoteDecision.reason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            else RichTextView(q.text, q.facets, nav, maxLines = 6)
-                        }
-                    }
-                }
+                post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 10.dp)) }
                 Actions(post, nav)
             }
         }
     }
+    if (!lineBelow) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+}
+
+/** Bluesky's verification badges: a blue tick for verified accounts, a scalloped one for trusted verifiers. */
+@Composable
+fun VerifiedBadge(author: Author, size: androidx.compose.ui.unit.Dp) {
+    when {
+        author.verifier -> Icon(Icons.Rounded.Verified, "Trusted verifier", Modifier.padding(start = 3.dp).size(size), tint = Color(0xFF1083FE))
+        author.verified -> Icon(Icons.Rounded.CheckCircle, "Verified", Modifier.padding(start = 3.dp).size(size), tint = Color(0xFF1083FE))
+    }
+}
+
+/**
+ * The post a thread is about, laid out like Bluesky: author at the top, larger text across the full
+ * width, the full date, then counts and actions between dividers.
+ */
+@Composable
+fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
+    val lineColor = MaterialTheme.colorScheme.outlineVariant
+    val prefs by Graph.store.moderation.collectAsState()
+    val signedIn = Graph.store.session.collectAsState().value != null
+    val decision = remember(post, prefs, signedIn) { Moderation.decide(post, prefs, signedIn) }
+    var revealed by remember(post.uri) { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxWidth()
+            .drawBehind { if (lineAbove) drawRect(lineColor, Offset(36.dp.toPx() - 1.dp.toPx(), 0f), Size(2.dp.toPx(), 10.dp.toPx())) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(post.author.avatar, 40.dp, Modifier.clickable { nav.profile(post.author.did) })
+            Column(Modifier.padding(start = 12.dp).weight(1f).clickable { nav.profile(post.author.did) }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(post.author.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    VerifiedBadge(post.author, 16.dp)
+                }
+                Text("@${post.author.handle}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+        }
+        if (decision is Moderation.Decision.Hide && !revealed) {
+            ContentCover(decision.reason, Modifier.padding(top = 12.dp)) { revealed = true }
+            return@Column
+        }
+        if (decision is Moderation.Decision.Warn && !revealed) {
+            ContentCover(decision.reason, Modifier.padding(top = 12.dp)) { revealed = true }
+        } else {
+            if (post.text.isNotBlank()) {
+                Box(Modifier.padding(top = 12.dp)) {
+                    RichTextView(post.text, post.facets, nav, large = true)
+                }
+            }
+            if (decision is Moderation.Decision.BlurMedia && !revealed && (post.images.isNotEmpty() || post.card != null)) {
+                ContentCover(decision.reason, Modifier.padding(top = 12.dp), media = true) { revealed = true }
+            } else {
+                if (post.images.isNotEmpty()) Images(post, Modifier.padding(top = 12.dp))
+                post.card?.let { LinkCardView(it, Modifier.padding(top = 12.dp)) }
+            }
+            post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 12.dp)) }
+        }
+        Text(
+            post.createdAt?.let { fullDate(it) }.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        HorizontalDivider(Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+        // Counts, like "12 reposts  3 quotes  45 likes".
+        val counts = listOf(post.repostCount to "repost", post.quoteCount to "quote", post.likeCount to "like").filter { it.first > 0 }
+        if (counts.isNotEmpty()) {
+            Row(Modifier.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                counts.forEach { (n, word) ->
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(compact(n)) }
+                            append(" " + word + if (n == 1) "" else "s")
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+        }
+        Actions(post, nav)
+    }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
 }
+
+/** A quoted post in a rounded box, with its own moderation. */
+@Composable
+fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
+    val prefs by Graph.store.moderation.collectAsState()
+    val signedIn = Graph.store.session.collectAsState().value != null
+    val quoteDecision = remember(q, prefs, signedIn) { Moderation.decide(q, prefs, signedIn) }
+    if (quoteDecision is Moderation.Decision.Hide) {
+        Text(
+            "Quoted post hidden: ${quoteDecision.reason}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)).padding(12.dp),
+        )
+        return
+    }
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Transparent,
+        modifier = modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).clickable { nav.post(q.uri) },
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(q.author.avatar, 20.dp)
+                Text(q.author.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
+                VerifiedBadge(q.author, 13.dp)
+                Text(" @${q.author.handle} · ${shortAgo(q.createdAt)}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.height(4.dp))
+            if (quoteDecision is Moderation.Decision.Warn) Text("Content warning: ${quoteDecision.reason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else RichTextView(q.text, q.facets, nav, maxLines = 6)
+        }
+    }
+}
+
+private fun fullDate(at: java.time.Instant): String =
+    java.time.format.DateTimeFormatter.ofPattern("h:mm a · d MMM yyyy").withZone(java.time.ZoneId.systemDefault()).format(at)
 
 @Composable
 private fun Images(post: Post, modifier: Modifier) {

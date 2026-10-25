@@ -32,6 +32,11 @@ data class Author(
     val blocking: Boolean = false,
     val blockedBy: Boolean = false,
     val following: Boolean = false,
+    /** Verified by a trusted verifier (Bluesky's blue tick). */
+    val verified: Boolean = false,
+    /** A trusted verifier itself, like Bluesky or a news organisation (the scalloped badge). */
+    val verifier: Boolean = false,
+    val pronouns: String? = null,
 ) {
     val name get() = displayName?.takeIf { it.isNotBlank() } ?: handle
 }
@@ -49,6 +54,7 @@ data class Post(
     val replyCount: Int,
     val repostCount: Int,
     val likeCount: Int,
+    val quoteCount: Int = 0,
     val images: List<Image>,
     val card: LinkCard?,
     val quote: Post?,
@@ -64,7 +70,16 @@ data class Post(
 
 data class Ref(val uri: String, val cid: String)
 
-data class FeedItem(val post: Post, val repostedBy: Author?, val replyTo: Author?)
+data class FeedItem(
+    val post: Post,
+    val repostedBy: Author?,
+    val replyTo: Author?,
+    /** The post this replies to, shown above it in feeds like Bluesky does. */
+    val parent: Post? = null,
+)
+
+/** A Profile Link: a highlighted link under the bio (Bluesky 1.136, October 2026). */
+data class ProfileLink(val url: String, val title: String?, val icon: String?)
 data class Page<T>(val items: List<T>, val cursor: String?)
 
 data class Profile(
@@ -75,6 +90,10 @@ data class Profile(
     val follows: Int,
     val posts: Int,
     val myFollow: String?,
+    val links: List<ProfileLink> = emptyList(),
+    /** Live on Twitch, Streamplace and the like, with where to watch. */
+    val liveUrl: String? = null,
+    val followsYou: Boolean = false,
 )
 
 data class ThreadNode(val post: Post, val replies: List<ThreadNode>)
@@ -262,8 +281,9 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
     suspend fun timeline(cursor: String? = null): Page<FeedItem> =
         call("GET", "app.bsky.feed.getTimeline", mapOf("limit" to "30", "cursor" to cursor)).let(::feedPage)
 
-    suspend fun authorFeed(actor: String, cursor: String? = null): Page<FeedItem> =
-        call("GET", "app.bsky.feed.getAuthorFeed", mapOf("actor" to actor, "limit" to "30", "filter" to "posts_and_author_threads", "cursor" to cursor)).let(::feedPage)
+    /** filter: posts_and_author_threads (Posts), posts_with_replies (Replies) or posts_with_media (Media). */
+    suspend fun authorFeed(actor: String, cursor: String? = null, filter: String = "posts_and_author_threads"): Page<FeedItem> =
+        call("GET", "app.bsky.feed.getAuthorFeed", mapOf("actor" to actor, "limit" to "30", "filter" to filter, "cursor" to cursor)).let(::feedPage)
 
     suspend fun profile(actor: String): Profile = parseProfile(call("GET", "app.bsky.actor.getProfile", mapOf("actor" to actor)))
 
@@ -391,8 +411,11 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             val post = f["post"].obj?.let(::parsePost) ?: return@mapNotNull null
             val reason = f["reason"].obj
             val by = if (reason.str("\$type")?.endsWith("reasonRepost") == true) reason!!["by"].obj?.let(::parseAuthor) else null
-            val replyTo = f["reply"].obj?.get("parent").obj?.get("author").obj?.let(::parseAuthor)
-            FeedItem(post, by, replyTo)
+            val parentObj = f["reply"].obj?.get("parent").obj
+            val replyTo = parentObj?.get("author").obj?.let(::parseAuthor)
+            // Reposted replies show without their parent, as in Bluesky.
+            val parent = if (by == null) parentObj?.let(::parsePost) else null
+            FeedItem(post, by, replyTo, parent)
         }
         return Page(items, o.str("cursor"))
     }
@@ -407,6 +430,9 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             blocking = viewer.str("blocking") != null,
             blockedBy = viewer?.get("blockedBy")?.let { (it as? JsonPrimitive)?.content == "true" } == true,
             following = viewer.str("following") != null,
+            verified = o["verification"].obj.str("verifiedStatus") == "valid",
+            verifier = o["verification"].obj.str("trustedVerifierStatus") == "valid",
+            pronouns = o.str("pronouns")?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -424,6 +450,15 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         follows = o.int("followsCount"),
         posts = o.int("postsCount"),
         myFollow = o["viewer"].obj.str("following"),
+        links = (o["links"] as? JsonArray).orEmpty().mapNotNull { e ->
+            val l = e.obj ?: return@mapNotNull null
+            ProfileLink(l.str("url") ?: return@mapNotNull null, l.str("title")?.takeIf { it.isNotBlank() }, l.str("icon"))
+        },
+        liveUrl = o["status"].obj?.let { st ->
+            val active = (st["isActive"] as? JsonPrimitive)?.content == "true"
+            if (st.str("status") == "app.bsky.actor.status#live" && active) st["embed"].obj?.get("external").obj.str("uri") else null
+        },
+        followsYou = o["viewer"].obj.str("followedBy") != null,
     )
 
     fun parsePost(o: JsonObject): Post? {
@@ -440,6 +475,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             replyCount = o.int("replyCount"),
             repostCount = o.int("repostCount"),
             likeCount = o.int("likeCount"),
+            quoteCount = o.int("quoteCount"),
             images = images(embed),
             card = card(embed),
             quote = quote(embed),

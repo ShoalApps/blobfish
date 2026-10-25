@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -67,6 +68,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -179,7 +187,16 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
     val prefs = Graph.store.moderation.collectAsState().value
     // Reply, repost and quote options are for the Following timeline only, as in Bluesky's app.
     if (following && Moderation.hiddenInFeed(item, prefs)) return
-    PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo)
+    val parent = item.parent
+    if (parent != null && Moderation.decide(parent, prefs, Graph.store.session.value != null) !is Moderation.Decision.Hide) {
+        // Like Bluesky: the post being replied to, then the reply, joined by the thread line.
+        Column {
+            PostCard(parent, nav, lineBelow = true)
+            PostCard(item.post, nav, lineAbove = true)
+        }
+    } else {
+        PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo)
+    }
 }
 
 // ---------------- Home ----------------
@@ -381,22 +398,29 @@ fun ThreadScreen(uri: String, nav: Nav, onBack: () -> Unit) {
                 vm.error != null -> item { Message(vm.error!!, "Try again") { vm.load() } }
                 t == null -> item { CenterLoading() }
                 else -> {
-                    items(t.parents) { PostCard(it, nav, noteWhenHidden = true) }
-                    item { PostCard(t.focus.post, nav, big = true) }
-                    replies(t.focus.replies, nav, depth = 0)
+                    // The conversation above, joined by Bluesky's thread line down to the post.
+                    itemsIndexed(t.parents, key = { _, p -> p.uri }) { i, p -> PostCard(p, nav, noteWhenHidden = true, lineAbove = i > 0, lineBelow = true) }
+                    item(key = t.focus.post.uri) { AnchorPost(t.focus.post, nav, lineAbove = t.parents.isNotEmpty()) }
+                    t.focus.replies.forEach { replies(it, nav, depth = 0, lineAbove = false) }
                 }
             }
         }
     }
 }
 
-private fun LazyListScope.replies(nodes: List<ThreadNode>, nav: Nav, depth: Int) {
-    nodes.forEach { n ->
-        item(key = n.post.uri) {
-            Box(Modifier.padding(start = (depth * 16).coerceAtMost(64).dp)) { PostCard(n.post, nav, noteWhenHidden = true) }
+/**
+ * Replies the way Bluesky lays them out: a reply's first answer continues straight below it on the
+ * same thread line; further answers branch off, indented.
+ */
+private fun LazyListScope.replies(n: ThreadNode, nav: Nav, depth: Int, lineAbove: Boolean) {
+    val continues = n.replies.isNotEmpty() && depth < 6
+    item(key = n.post.uri) {
+        Box(Modifier.padding(start = (depth * 28).dp)) {
+            PostCard(n.post, nav, noteWhenHidden = true, lineAbove = lineAbove, lineBelow = continues)
         }
-        if (depth < 4) replies(n.replies, nav, depth + 1)
     }
+    if (!continues) return
+    n.replies.forEachIndexed { i, c -> replies(c, nav, if (i == 0) depth else depth + 1, lineAbove = i == 0) }
 }
 
 // ---------------- Profile ----------------
@@ -405,8 +429,100 @@ class ProfileVm(private val actor: String) : ViewModel() {
     var profile by mutableStateOf<Profile?>(null); private set
     var error by mutableStateOf<String?>(null); private set
     val posts = PagedVm { c -> Graph.atp.authorFeed(actor, c) }
+    val replies by lazy { PagedVm { c -> Graph.atp.authorFeed(actor, c, "posts_with_replies") } }
+    val media by lazy { PagedVm { c -> Graph.atp.authorFeed(actor, c, "posts_with_media") } }
+    var tab by mutableStateOf(0)
+    val current get() = when (tab) { 1 -> replies; 2 -> media; else -> posts }
     init { load() }
     fun load() { viewModelScope.launch { runCatching { Graph.atp.profile(actor) }.onSuccess { profile = it }.onFailure { error = friendly(it) } } }
+}
+
+/** A profile's top, laid out like Bluesky's: banner, avatar, buttons, name and badges, counts, bio, Profile Links. */
+@Composable
+private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean, signedIn: Boolean, onFollow: () -> Unit, onUnfollow: () -> Unit) {
+    val context = LocalContext.current
+    Column {
+        Box {
+            AsyncImage(
+                model = p.banner, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().aspectRatio(3f).background(MaterialTheme.colorScheme.primaryContainer),
+            )
+            Box(Modifier.padding(start = 16.dp).offset(y = 44.dp).align(Alignment.BottomStart)) {
+                Box(contentAlignment = Alignment.BottomCenter) {
+                    Box(
+                        Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface).padding(3.dp)
+                            .then(if (p.liveUrl != null) Modifier.border(3.dp, Color(0xFFE11D48), CircleShape).padding(3.dp) else Modifier),
+                    ) { Avatar(p.author.avatar, 84.dp) }
+                    // Bluesky's LIVE badge, linking to the stream.
+                    p.liveUrl?.let { url ->
+                        Text(
+                            "LIVE", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.offset(y = 6.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE11D48)).clickable { openLink(context, url) }.padding(horizontal = 6.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).height(40.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            if (signedIn && !isMe) {
+                if (followed == null) Button(onClick = onFollow) { Text(if (p.followsYou) "Follow back" else "Follow") }
+                else androidx.compose.material3.FilledTonalButton(onClick = onUnfollow) { Text("Following") }
+            }
+        }
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(p.author.name, style = MaterialTheme.typography.headlineSmallEmphasized, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
+                VerifiedBadge(p.author, 22.dp)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (p.followsYou) {
+                    Text("Follows you", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest).padding(horizontal = 5.dp, vertical = 1.dp))
+                }
+                Text("@${p.author.handle}" + (p.author.pronouns?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    listOf(p.followers to "followers", p.follows to "following", p.posts to "posts").forEachIndexed { i, (n, label) ->
+                        if (i > 0) append("   ")
+                        withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(compact(n)) }
+                        append(" $label")
+                    }
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+            p.description?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(10.dp))
+                RichTextView(it, emptyList(), nav)
+            }
+            if (p.links.isNotEmpty()) {
+                // Profile Links: straight to the site, Patreon and Ko-fi in green like Bluesky.
+                androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    p.links.forEach { l -> ProfileLinkChip(l) }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun ProfileLinkChip(l: io.github.swordfishapps.social.data.ProfileLink) {
+    val context = LocalContext.current
+    val host = remember(l.url) { runCatching { android.net.Uri.parse(l.url).host?.removePrefix("www.") }.getOrNull().orEmpty() }
+    val payment = host.endsWith("patreon.com") || host.endsWith("ko-fi.com")
+    val bg = if (payment) Color(0xFF15803D) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val fg = if (payment) Color.White else MaterialTheme.colorScheme.onSurface
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(bg)
+            .combinedClickable(onClick = { openLink(context, l.url) }, onLongClick = { toast(context, l.url) })
+            .padding(start = 6.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (l.icon != null) AsyncImage(l.icon, null, Modifier.size(20.dp).clip(CircleShape))
+        else Icon(Icons.Rounded.Link, null, Modifier.size(20.dp), tint = fg)
+        Text(l.title ?: host, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp))
+    }
 }
 
 @Composable
@@ -426,54 +542,31 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
             )
         },
     ) { pad ->
-        PagedList(vm.posts, Modifier.padding(top = pad.calculateTopPadding()), header = {
-            item {
+        PagedList(vm.current, Modifier.padding(top = pad.calculateTopPadding()), header = {
+            item(key = "header") {
                 val p = vm.profile
                 if (p == null) {
                     if (vm.error != null) Message(vm.error!!, "Try again") { vm.load() } else CenterLoading()
                     return@item
                 }
-                Column {
-                    Box {
-                        AsyncImage(
-                            model = p.banner, contentDescription = null, contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().aspectRatio(3f).background(MaterialTheme.colorScheme.primaryContainer),
-                        )
-                        Box(Modifier.padding(start = 16.dp).offset(y = 44.dp).align(Alignment.BottomStart)) {
-                            MorphingAvatar(p.author.avatar, 88.dp)
-                        }
+                ProfileHeader(p, nav, followed, isMe = session?.did == p.author.did, signedIn = session != null,
+                    onFollow = {
+                        followed = "pending"
+                        scope.launch { runCatching { followed = Graph.atp.follow(p.author.did) }.onFailure { followed = null; toast(context, friendly(it)) } }
+                    },
+                    onUnfollow = {
+                        val was = followed!!
+                        followed = null
+                        scope.launch { runCatching { Graph.atp.undo(was) }.onFailure { followed = was; toast(context, friendly(it)) } }
+                    },
+                )
+            }
+            item(key = "tabs") {
+                // Bluesky's profile tabs.
+                PrimaryTabRow(selectedTabIndex = vm.tab) {
+                    listOf("Posts", "Replies", "Media").forEachIndexed { i, label ->
+                        Tab(selected = vm.tab == i, onClick = { vm.tab = i }, text = { Text(label) })
                     }
-                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
-                        if (session != null && session!!.did != p.author.did) {
-                            if (followed == null) {
-                                Button(onClick = {
-                                    followed = "pending"
-                                    scope.launch { runCatching { followed = Graph.atp.follow(p.author.did) }.onFailure { followed = null; toast(context, friendly(it)) } }
-                                }) { Text("Follow") }
-                            } else {
-                                androidx.compose.material3.FilledTonalButton(onClick = {
-                                    val was = followed!!
-                                    followed = null
-                                    scope.launch { runCatching { Graph.atp.undo(was) }.onFailure { followed = was; toast(context, friendly(it)) } }
-                                }) { Text("Following") }
-                            }
-                        } else Spacer(Modifier.height(40.dp))
-                    }
-                    Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text(p.author.name, style = MaterialTheme.typography.headlineSmallEmphasized)
-                        Text("@${p.author.handle}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            "${compact(p.followers)} followers · ${compact(p.follows)} following · ${compact(p.posts)} posts",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                        p.description?.takeIf { it.isNotBlank() }?.let {
-                            Spacer(Modifier.height(8.dp))
-                            RichTextView(it, emptyList(), nav)
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    androidx.compose.material3.HorizontalDivider()
                 }
             }
         }) { FeedRow(it, nav) }
