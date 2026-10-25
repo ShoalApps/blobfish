@@ -22,6 +22,13 @@
         <package android:name="io.github.tintloom.social" />
     </queries>
 
+    <!-- Accounts from Swordfish Manager (signature-protected). -->
+    <uses-permission android:name="io.github.swordfishapps.permission.ACCOUNTS" />
+    <queries>
+        <provider android:authorities="io.github.swordfishapps.manager.accounts" />
+        <provider android:authorities="io.github.swordfishapps.manager.debug.accounts" />
+    </queries>
+
     <application
         android:name=".SocialApp"
         android:label="@string/app_name"

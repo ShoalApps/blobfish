@@ -54,6 +54,19 @@ object Graph {
     val atp by lazy { Atp(http, store) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Takes up accounts signed into in Swordfish Manager, when they've changed. */
+    fun pullManagerAccounts() {
+        val s = ManagerAccounts.read(app) ?: return
+        if (!ManagerAccounts.changed(app, s)) return
+        s.cookies["x"]?.let { ManagerAccounts.applyCookies("https://x.com", it) }
+        val handle = s.blueskyHandle
+        val password = s.blueskyAppPassword
+        if (handle != null && password != null && store.session.value?.handle != handle) {
+            // Bluesky sessions can't be shared, so sign in here with the Manager's app password.
+            scope.launch { runCatching { atp.signIn(handle, password) }.onSuccess { syncModeration(); syncProfile() } }
+        }
+    }
+
     /** Your profile picture, for the You tab. */
     var myAvatar by mutableStateOf<String?>(null)
 
