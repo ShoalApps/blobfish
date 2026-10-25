@@ -17,6 +17,7 @@ android {
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
         resValue("string", "app_name", "Tintloom Social")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // The release key lives only in GitHub Actions secrets, never in the repo.
@@ -78,4 +79,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

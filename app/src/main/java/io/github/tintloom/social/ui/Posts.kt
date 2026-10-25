@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -63,6 +64,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -253,31 +255,47 @@ fun PostCard(
 
 @Composable
 private fun Images(post: Post, modifier: Modifier) {
-    val context = LocalContext.current
     val shape = RoundedCornerShape(16.dp)
     val imgs = post.images
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    viewing?.let { ImageViewer(imgs, it) { viewing = null } }
     if (imgs.size == 1) {
         val i = imgs[0]
-        AsyncImage(
-            model = i.thumb,
-            contentDescription = i.alt.ifBlank { null },
-            contentScale = ContentScale.Crop,
-            modifier = modifier.fillMaxWidth().heightIn(max = 520.dp).aspectRatio((i.aspect ?: 1.5f).coerceIn(.75f, 2f)).clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { openLink(context, i.full) },
-        )
+        // Tall photos get narrower rather than taller, so a post never grows past 520dp of photo.
+        val ratio = (i.aspect ?: 1.5f).coerceIn(.5f, 3f)
+        androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth()) {
+            val width = minOf(maxWidth, 520.dp * ratio)
+            AsyncImage(
+                model = i.thumb,
+                contentDescription = i.alt.ifBlank { null },
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.width(width).height(width / ratio).clip(shape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { viewing = 0 }.testTag("post-image"),
+            )
+        }
         return
     }
-    Row(modifier.fillMaxWidth().heightIn(max = 260.dp).clip(shape), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        imgs.chunked(2).forEach { col ->
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                col.forEach { i ->
-                    AsyncImage(
-                        model = i.thumb,
-                        contentDescription = i.alt.ifBlank { null },
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(if (imgs.size == 2) .8f else 1.3f)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { openLink(context, i.full) },
-                    )
+    // Two side by side; three as one large and two stacked; four as a 2×2 grid (read across).
+    val columns = when (imgs.size) {
+        2 -> listOf(listOf(0), listOf(1))
+        3 -> listOf(listOf(0), listOf(1, 2))
+        else -> listOf(listOf(0, 2), listOf(1, 3))
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth()) {
+        val height = minOf(maxWidth * (if (imgs.size == 2) .62f else .75f), 400.dp)
+        Row(Modifier.fillMaxWidth().height(height).clip(shape), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            columns.forEach { col ->
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    col.forEach { index ->
+                        val i = imgs[index]
+                        AsyncImage(
+                            model = i.thumb,
+                            contentDescription = i.alt.ifBlank { null },
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().weight(1f)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { viewing = index }.testTag("post-image"),
+                        )
+                    }
                 }
             }
         }
@@ -313,7 +331,7 @@ private fun Actions(post: Post, nav: Nav) {
     var likes by remember(post.uri) { mutableIntStateOf(post.likeCount) }
     var repostUri by remember(post.uri) { mutableStateOf(post.myRepost) }
     var reposts by remember(post.uri) { mutableIntStateOf(post.repostCount) }
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp).testTag("post-actions"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Action(Icons.Outlined.ChatBubbleOutline, post.replyCount, false, "Reply") {
             if (signedIn) nav.reply(post) else toast(context, "Sign in to reply")
         }
