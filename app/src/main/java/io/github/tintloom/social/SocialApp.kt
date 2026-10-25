@@ -81,6 +81,8 @@ object Graph {
     }
 
     fun checkForUpdate(force: Boolean = false) {
+        // Tintloom Manager handles updates when it is installed.
+        if (!force && io.github.tintloom.social.TintloomManager.installed(app)) return
         if (!Updater.canUpdate(app)) {
             if (force) Update.message = "Development builds don't update themselves"
             return

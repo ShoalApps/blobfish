@@ -711,8 +711,12 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 row { sh -> Link("Moderation", "Content filters, muted words, hidden posts, muted accounts, replies and reposts", sh, onModeration) }
             }
             group("Updates") {
-                row { sh -> Toggle("Check for updates", "Look for a new version on GitHub once a day", s.autoUpdate, sh) { v -> store.updateSettings { it.copy(autoUpdate = v) } } }
-                row { sh -> Link("Check now", "Version $version", sh) { Graph.checkForUpdate(force = true) } }
+                if (io.github.tintloom.social.TintloomManager.installed(context)) {
+                    row { sh -> Link("Managed by Tintloom Manager", "Updates are checked and installed by Tintloom Manager", sh) { io.github.tintloom.social.TintloomManager.checkForUpdates(context) } }
+                } else {
+                    row { sh -> Toggle("Check for updates", "Look for a new version on GitHub once a day", s.autoUpdate, sh) { v -> store.updateSettings { it.copy(autoUpdate = v) } } }
+                }
+                row { sh -> Link("Check for updates now", "Version $version · opens Tintloom Manager", sh) { io.github.tintloom.social.TintloomManager.checkForUpdates(context) } }
             }
             group("About") {
                 row { sh -> Link("Source code", "github.com/Tintloom/social", sh) { openLink(context, "https://github.com/Tintloom/social") } }

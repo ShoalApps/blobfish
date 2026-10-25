@@ -6,6 +6,11 @@
     <!-- Installing updates downloaded from the project's GitHub releases; Android always asks first. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Tintloom Manager takes over updates when it is installed. -->
+    <queries>
+        <package android:name="io.github.tintloom.manager" />
+    </queries>
+
     <application
         android:name=".SocialApp"
         android:label="@string/app_name"
