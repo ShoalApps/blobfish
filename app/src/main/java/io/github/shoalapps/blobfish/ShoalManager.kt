@@ -14,15 +14,18 @@ object ShoalManager {
     private const val ACTION = "io.github.shoalapps.shoal.CHECK_UPDATES"
     private const val DOWNLOAD = "https://github.com/ShoalApps/shoal/releases/latest/download/Shoal.apk"
 
+    /** Debug builds pair with Shoal's debug build. */
+    private fun pkg(context: Context) = if (context.packageName.endsWith(".debug")) "$PACKAGE.debug" else PACKAGE
+
     fun installed(context: Context): Boolean =
-        runCatching { context.packageManager.getPackageInfo(PACKAGE, 0) }.isSuccess
+        runCatching { context.packageManager.getPackageInfo(pkg(context), 0) }.isSuccess
 
     /** Opens the Manager on this app, or offers to get it. */
     fun checkForUpdates(context: Context) {
         if (installed(context)) {
             runCatching {
                 context.startActivity(
-                    Intent(ACTION).setPackage(PACKAGE).putExtra("package", context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    Intent(ACTION).setPackage(pkg(context)).putExtra("package", context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             }.onSuccess { return }
         }
