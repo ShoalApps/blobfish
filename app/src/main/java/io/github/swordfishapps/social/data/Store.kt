@@ -17,6 +17,8 @@ data class Settings(
     val showReposts: Boolean = true,
     val showReplies: Boolean = true,
     val autoUpdate: Boolean = true,
+    /** An X tab showing x.com, signed in on X's own login. */
+    val showX: Boolean = true,
 )
 
 @Serializable

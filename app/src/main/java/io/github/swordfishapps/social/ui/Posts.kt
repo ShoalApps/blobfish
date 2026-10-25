@@ -109,6 +109,9 @@ class Nav(
     val profile: (String) -> Unit,
     val tag: (String) -> Unit,
     val reply: (Post) -> Unit,
+    /** "followers" or "follows" for an account. */
+    val people: (String, String) -> Unit = { _, _ -> },
+    val editProfile: () -> Unit = {},
 )
 
 fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()

@@ -5,6 +5,7 @@ package io.github.swordfishapps.social
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.compose.material.icons.rounded.AlternateEmail
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.size
@@ -80,6 +81,8 @@ import io.github.swordfishapps.social.ui.YouScreen
 
 private data class Tab(val route: String, val label: String, val on: ImageVector, val off: ImageVector)
 
+private val xTab = Tab("x", "X", Icons.Rounded.AlternateEmail, Icons.Rounded.AlternateEmail)
+
 private val tabs = listOf(
     Tab("home", "Home", Icons.Rounded.Home, Icons.Outlined.Home),
     Tab("search", "Search", Icons.Rounded.Search, Icons.Outlined.Search),
@@ -145,6 +148,8 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
             profile = { actor -> navController.navigate("profile/${Uri.encode(actor)}") },
             tag = { tag -> navController.navigate("search?q=${Uri.encode("#$tag")}") },
             reply = { p -> replyTo = p; composing = true },
+            people = { kind, actor -> navController.navigate("people/$kind/${Uri.encode(actor)}") },
+            editProfile = { navController.navigate("editprofile") },
         )
     }
     // bsky.app/profile/<handle> and bsky.app/profile/<handle>/post/<id> open inside the app.
@@ -154,6 +159,8 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
         else if (segs.size >= 2) nav.profile(segs[1])
         onLinkHandled()
     }
+    val showX = Graph.store.settings.collectAsState().value.showX
+    val tabs = if (showX) tabs.take(3) + xTab + tabs.drop(3) else tabs
     val isTab = tabs.any { it.route == route } || route == null
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
@@ -200,6 +207,9 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                     composable("signin") { SignInScreen(onDone = { navController.popBackStack() }, onBack = { navController.popBackStack() }) }
                     composable("settings") { SettingsScreen(onBack = { navController.popBackStack() }, onSignIn = { navController.navigate("signin") }, onModeration = { navController.navigate("moderation") }) }
                     composable("moderation") { ModerationScreen(onBack = { navController.popBackStack() }) }
+                    composable("people/{kind}/{actor}") { e -> io.github.swordfishapps.social.ui.PeopleScreen(e.arguments?.getString("kind").orEmpty(), Uri.decode(e.arguments?.getString("actor").orEmpty()), nav, onBack = { navController.popBackStack() }) }
+                    composable("editprofile") { io.github.swordfishapps.social.ui.EditProfileScreen(onBack = { navController.popBackStack() }) }
+                    composable("x") { io.github.swordfishapps.social.ui.XScreen() }
                 }
             }
         }

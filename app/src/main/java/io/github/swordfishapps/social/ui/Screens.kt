@@ -441,18 +441,22 @@ class ProfileVm(private val actor: String) : ViewModel() {
 @Composable
 private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean, signedIn: Boolean, onFollow: () -> Unit, onUnfollow: () -> Unit) {
     val context = LocalContext.current
+    // Tapping the banner or picture shows it full size.
+    var viewing by remember { mutableStateOf<String?>(null) }
+    viewing?.let { url -> ImageViewer(listOf(io.github.swordfishapps.social.data.Image(url, url, "", null)), 0) { viewing = null } }
     Column {
         Box {
             AsyncImage(
                 model = p.banner, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().aspectRatio(3f).background(MaterialTheme.colorScheme.primaryContainer),
+                modifier = Modifier.fillMaxWidth().aspectRatio(3f).background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(enabled = p.banner != null) { viewing = p.banner },
             )
             Box(Modifier.padding(start = 16.dp).offset(y = 44.dp).align(Alignment.BottomStart)) {
                 Box(contentAlignment = Alignment.BottomCenter) {
                     Box(
                         Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface).padding(3.dp)
                             .then(if (p.liveUrl != null) Modifier.border(3.dp, Color(0xFFE11D48), CircleShape).padding(3.dp) else Modifier),
-                    ) { Avatar(p.author.avatar, 84.dp) }
+                    ) { Avatar(p.author.avatar, 84.dp, Modifier.clickable(enabled = p.author.avatar != null) { viewing = p.author.avatar?.replace("/avatar_thumbnail/", "/avatar/") }) }
                     // Bluesky's LIVE badge, linking to the stream.
                     p.liveUrl?.let { url ->
                         Text(
@@ -464,6 +468,7 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).height(40.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            if (isMe) androidx.compose.material3.OutlinedButton(onClick = nav.editProfile) { Text("Edit profile") }
             if (signedIn && !isMe) {
                 if (followed == null) Button(onClick = onFollow) { Text(if (p.followsYou) "Follow back" else "Follow") }
                 else androidx.compose.material3.FilledTonalButton(onClick = onUnfollow) { Text("Following") }
@@ -480,17 +485,18 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
                 }
                 Text("@${p.author.handle}" + (p.author.pronouns?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                androidx.compose.ui.text.buildAnnotatedString {
-                    listOf(p.followers to "followers", p.follows to "following", p.posts to "posts").forEachIndexed { i, (n, label) ->
-                        if (i > 0) append("   ")
-                        withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(compact(n)) }
-                        append(" $label")
-                    }
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 10.dp),
-            )
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                listOf(Triple(p.followers, "followers", "followers"), Triple(p.follows, "following", "follows"), Triple(p.posts, "posts", null)).forEach { (n, label, kind) ->
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) { append(compact(n)) }
+                            append(" $label")
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = if (kind != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable { nav.people(kind, p.author.did) } else Modifier,
+                    )
+                }
+            }
             p.description?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(10.dp))
                 RichTextView(it, emptyList(), nav)
@@ -802,6 +808,12 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
             }
             group("Posts") {
                 row { sh -> Toggle("Rich formatting", "Show code blocks, bold and italic in posts, like mu", s.richFormatting, sh) { v -> store.updateSettings { it.copy(richFormatting = v) } } }
+            }
+            group("X") {
+                row { sh -> Toggle("X tab", "x.com in its own tab, signed in on X's own page", s.showX, sh) { v -> store.updateSettings { it.copy(showX = v) } } }
+                if (s.showX && io.github.swordfishapps.social.ui.XView.signedIn) {
+                    row { sh -> Link("Sign out of X", null, sh) { io.github.swordfishapps.social.ui.XView.signOut() } }
+                }
             }
             group("Moderation") {
                 row { sh -> Link("Moderation", "Content filters, muted words, hidden posts, muted accounts, replies and reposts", sh, onModeration) }

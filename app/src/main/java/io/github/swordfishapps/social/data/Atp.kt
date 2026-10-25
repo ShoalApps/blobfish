@@ -364,6 +364,55 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
     })
     suspend fun undo(recordUri: String) = deleteRecord(recordUri)
 
+    // ---- People and your profile ----
+
+    suspend fun followers(actor: String, cursor: String? = null): Page<Author> {
+        val o = call("GET", "app.bsky.graph.getFollowers", mapOf("actor" to actor, "limit" to "50", "cursor" to cursor))
+        return Page((o["followers"] as? JsonArray).orEmpty().mapNotNull { it.obj?.let(::parseAuthor) }, o.str("cursor"))
+    }
+
+    suspend fun follows(actor: String, cursor: String? = null): Page<Author> {
+        val o = call("GET", "app.bsky.graph.getFollows", mapOf("actor" to actor, "limit" to "50", "cursor" to cursor))
+        return Page((o["follows"] as? JsonArray).orEmpty().mapNotNull { it.obj?.let(::parseAuthor) }, o.str("cursor"))
+    }
+
+    /** Uploads an image to your PDS; returns the blob reference a record can point to. */
+    suspend fun uploadBlob(bytes: ByteArray, mime: String): JsonObject = withContext(Dispatchers.IO) {
+        val s = requireSession()
+        val req = Request.Builder().url("${s.pds}/xrpc/com.atproto.repo.uploadBlob")
+            .header("Authorization", "Bearer ${s.access}")
+            .post(bytes.toRequestBody(mime.toMediaType()))
+            .build()
+        http.newCall(req).execute().use { resp ->
+            val obj = runCatching { json.parseToJsonElement(resp.body!!.string()) as JsonObject }.getOrDefault(JsonObject(emptyMap()))
+            if (!resp.isSuccessful) throw AtpException(resp.code, obj.str("message") ?: "Couldn't upload the picture")
+            obj["blob"].obj ?: throw AtpException(500, "Couldn't upload the picture")
+        }
+    }
+
+    /**
+     * Saves your profile: reads the current record, changes only what's given (null leaves a field
+     * as it is) and writes it back, so fields this app doesn't know about are kept.
+     */
+    suspend fun updateProfile(displayName: String? = null, description: String? = null, avatar: JsonObject? = null, banner: JsonObject? = null) {
+        val s = requireSession()
+        val current = runCatching {
+            call("GET", "com.atproto.repo.getRecord", mapOf("repo" to s.did, "collection" to "app.bsky.actor.profile", "rkey" to "self"))
+        }.getOrNull()
+        val record = (current?.get("value").obj ?: buildJsonObject { put("\$type", "app.bsky.actor.profile") }).toMutableMap()
+        displayName?.let { record["displayName"] = JsonPrimitive(it) }
+        description?.let { record["description"] = JsonPrimitive(it) }
+        avatar?.let { record["avatar"] = it }
+        banner?.let { record["banner"] = it }
+        call("POST", "com.atproto.repo.putRecord", body = buildJsonObject {
+            put("repo", s.did)
+            put("collection", "app.bsky.actor.profile")
+            put("rkey", "self")
+            put("record", JsonObject(record))
+            current?.str("cid")?.let { put("swapRecord", it) }
+        })
+    }
+
     suspend fun follow(did: String): String = createRecord("app.bsky.graph.follow", buildJsonObject {
         put("\$type", "app.bsky.graph.follow"); put("subject", did); put("createdAt", now())
     })
