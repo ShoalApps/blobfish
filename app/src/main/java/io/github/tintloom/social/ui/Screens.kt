@@ -90,6 +90,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import io.github.tintloom.social.Graph
+import io.github.tintloom.social.data.Moderation
 import io.github.tintloom.social.data.AtpException
 import io.github.tintloom.social.data.Author
 import io.github.tintloom.social.data.FeedItem
@@ -174,9 +175,8 @@ fun <T> PagedList(
 
 @Composable
 private fun FeedRow(item: FeedItem, nav: Nav) {
-    val s = Graph.store.settings.collectAsState().value
-    if (item.repostedBy != null && !s.showReposts) return
-    if (item.replyTo != null && !s.showReplies) return
+    val prefs = Graph.store.moderation.collectAsState().value
+    if (Moderation.hiddenInFeed(item, prefs)) return
     PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo)
 }
 
@@ -377,7 +377,7 @@ fun ThreadScreen(uri: String, nav: Nav, onBack: () -> Unit) {
                 vm.error != null -> item { Message(vm.error!!, "Try again") { vm.load() } }
                 t == null -> item { CenterLoading() }
                 else -> {
-                    items(t.parents) { PostCard(it, nav) }
+                    items(t.parents) { PostCard(it, nav, noteWhenHidden = true) }
                     item { PostCard(t.focus.post, nav, big = true) }
                     replies(t.focus.replies, nav, depth = 0)
                 }
@@ -389,7 +389,7 @@ fun ThreadScreen(uri: String, nav: Nav, onBack: () -> Unit) {
 private fun LazyListScope.replies(nodes: List<ThreadNode>, nav: Nav, depth: Int) {
     nodes.forEach { n ->
         item(key = n.post.uri) {
-            Box(Modifier.padding(start = (depth * 16).coerceAtMost(64).dp)) { PostCard(n.post, nav) }
+            Box(Modifier.padding(start = (depth * 16).coerceAtMost(64).dp)) { PostCard(n.post, nav, noteWhenHidden = true) }
         }
         if (depth < 4) replies(n.replies, nav, depth + 1)
     }
@@ -562,7 +562,7 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
                     busy = true; error = null
                     scope.launch {
                         runCatching { Graph.atp.signIn(handle, password) }
-                            .onSuccess { onDone() }
+                            .onSuccess { Graph.syncModeration(); onDone() }
                             .onFailure { error = friendly(it) }
                         busy = false
                     }
@@ -619,12 +619,12 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
 
 // ---------------- Settings & About ----------------
 
-private class GroupBuilder {
+internal class GroupBuilder {
     val rows = mutableListOf<@Composable (ListItemShapes) -> Unit>()
     fun row(content: @Composable (ListItemShapes) -> Unit) { rows += content }
 }
 
-private fun LazyListScope.group(title: String, build: GroupBuilder.() -> Unit) {
+internal fun LazyListScope.group(title: String, build: GroupBuilder.() -> Unit) {
     val rows = GroupBuilder().apply(build).rows
     if (rows.isEmpty()) return
     item(key = "t-$title") {
@@ -638,7 +638,7 @@ private fun LazyListScope.group(title: String, build: GroupBuilder.() -> Unit) {
 }
 
 @Composable
-private fun tileColors() = ListItemDefaults.segmentedColors(
+internal fun tileColors() = ListItemDefaults.segmentedColors(
     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     selectedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     selectedContentColor = MaterialTheme.colorScheme.onSurface,
@@ -646,7 +646,7 @@ private fun tileColors() = ListItemDefaults.segmentedColors(
 )
 
 @Composable
-private fun Toggle(title: String, body: String?, checked: Boolean, shapes: ListItemShapes, onChange: (Boolean) -> Unit) {
+internal fun Toggle(title: String, body: String?, checked: Boolean, shapes: ListItemShapes, onChange: (Boolean) -> Unit) {
     SegmentedListItem(
         checked = checked, onCheckedChange = onChange, shapes = shapes,
         supportingContent = body?.let { { Text(it) } },
@@ -656,7 +656,7 @@ private fun Toggle(title: String, body: String?, checked: Boolean, shapes: ListI
 }
 
 @Composable
-private fun Link(title: String, body: String?, shapes: ListItemShapes, onClick: () -> Unit) {
+internal fun Link(title: String, body: String?, shapes: ListItemShapes, onClick: () -> Unit) {
     SegmentedListItem(
         onClick = onClick, shapes = shapes,
         supportingContent = body?.let { { Text(it) } },
@@ -666,7 +666,7 @@ private fun Link(title: String, body: String?, shapes: ListItemShapes, onClick: 
 }
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () -> Unit) {
     val context = LocalContext.current
     val store = Graph.store
     val s by store.settings.collectAsState()
@@ -705,8 +705,9 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit) {
             }
             group("Posts") {
                 row { sh -> Toggle("Rich formatting", "Show code blocks, bold and italic in posts, like mu", s.richFormatting, sh) { v -> store.updateSettings { it.copy(richFormatting = v) } } }
-                row { sh -> Toggle("Show reposts", null, s.showReposts, sh) { v -> store.updateSettings { it.copy(showReposts = v) } } }
-                row { sh -> Toggle("Show replies in feeds", null, s.showReplies, sh) { v -> store.updateSettings { it.copy(showReplies = v) } } }
+            }
+            group("Moderation") {
+                row { sh -> Link("Moderation", "Content filters, muted words, hidden posts, muted accounts, replies and reposts", sh, onModeration) }
             }
             group("Updates") {
                 row { sh -> Toggle("Check for updates", "Look for a new version on GitHub once a day", s.autoUpdate, sh) { v -> store.updateSettings { it.copy(autoUpdate = v) } } }

@@ -11,6 +11,7 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import io.github.tintloom.social.data.Atp
+import io.github.tintloom.social.data.Moderation
 import io.github.tintloom.social.data.Store
 import io.github.tintloom.social.data.Updater
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,7 @@ class SocialApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         Graph.app = this
+        Graph.syncModeration()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
@@ -49,6 +51,27 @@ object Graph {
     val store by lazy { Store(app) }
     val atp by lazy { Atp(http, store) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Fetches your account's moderation preferences (on start and after signing in). */
+    fun syncModeration() {
+        if (store.session.value == null) return
+        scope.launch { runCatching { atp.moderationPrefs() }.onSuccess(store::setModeration) }
+    }
+
+    /**
+     * Changes a moderation preference: applied at once, then saved to your account so every
+     * Bluesky app follows it. Returns a message if saving failed (the change is undone).
+     */
+    suspend fun changeModeration(change: (Moderation.Prefs) -> Moderation.Prefs): String? {
+        val before = store.moderation.value
+        val after = change(before)
+        store.setModeration(after)
+        if (store.session.value == null) return null
+        return runCatching { atp.saveModerationPrefs(after) }.exceptionOrNull()?.let {
+            store.setModeration(before)
+            it.message ?: "Couldn't save to your account"
+        }
+    }
 
     /** A newer release found on GitHub, its download progress, and any message about it. */
     object Update {

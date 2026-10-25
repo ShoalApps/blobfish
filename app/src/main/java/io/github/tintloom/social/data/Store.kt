@@ -43,8 +43,30 @@ class Store(context: Context) {
 
     fun setSession(s: Session?) {
         _session.value = s
-        if (s == null) prefs.edit().remove("session").apply()
+        if (s == null) { prefs.edit().remove("session").apply(); setModeration(Moderation.Prefs()) }
         else prefs.edit().putString("session", json.encodeToString(SavedSession.serializer(), SavedSession(s.did, s.handle, s.access, s.refresh, s.pds))).apply()
+    }
+
+    /** Moderation preferences: a copy of your account's (or the defaults when signed out). */
+    private val _moderation = MutableStateFlow(
+        prefs.getString("moderation", null)?.let { runCatching { json.decodeFromString<Moderation.Prefs>(it) }.getOrNull() } ?: Moderation.Prefs(),
+    )
+    val moderation: StateFlow<Moderation.Prefs> = _moderation
+
+    init {
+        // The old "Show reposts" / "Show replies" switches now live in moderation's feed options.
+        val old = _settings.value
+        if (!prefs.getBoolean("migratedFeedOptions", false)) {
+            if (!old.showReposts || !old.showReplies) {
+                setModeration(_moderation.value.copy(hideReposts = !old.showReposts, hideReplies = !old.showReplies))
+            }
+            prefs.edit().putBoolean("migratedFeedOptions", true).apply()
+        }
+    }
+
+    fun setModeration(p: Moderation.Prefs) {
+        _moderation.value = p
+        prefs.edit().putString("moderation", json.encodeToString(Moderation.Prefs.serializer(), p)).apply()
     }
 
     var lastUpdateCheck: Long

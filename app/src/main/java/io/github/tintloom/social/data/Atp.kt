@@ -21,7 +21,18 @@ import java.time.Instant
 
 // ---------------- Models ----------------
 
-data class Author(val did: String, val handle: String, val displayName: String?, val avatar: String?) {
+data class Author(
+    val did: String,
+    val handle: String,
+    val displayName: String?,
+    val avatar: String?,
+    /** Moderation labels on the account. */
+    val labels: List<String> = emptyList(),
+    val muted: Boolean = false,
+    val blocking: Boolean = false,
+    val blockedBy: Boolean = false,
+    val following: Boolean = false,
+) {
     val name get() = displayName?.takeIf { it.isNotBlank() } ?: handle
 }
 
@@ -45,6 +56,10 @@ data class Post(
     val myLike: String?,
     val myRepost: String?,
     val replyRoot: Ref?,
+    /** Moderation labels on the post itself. */
+    val labels: List<String> = emptyList(),
+    /** Hashtags, from the text and the post's extra tags; muted words check these. */
+    val tags: List<String> = emptyList(),
 )
 
 data class Ref(val uri: String, val cid: String)
@@ -101,6 +116,8 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         }.build()
         val req = Request.Builder().url(url).apply {
             if (s != null) header("Authorization", "Bearer ${s.access}")
+            // Labels are only included from labelers the request names: Bluesky's own, plus yours.
+            header("atproto-accept-labelers", (listOf("${Moderation.BLUESKY_LABELER};redact") + store.moderation.value.labelers).joinToString(", "))
             if (method == "POST") post((body ?: JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
         }.build()
         http.newCall(req).execute().use { resp ->
@@ -145,6 +162,97 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             ?.obj.str("serviceEndpoint") ?: fallbackPds
         return Session(o.str("did")!!, o.str("handle")!!, o.str("accessJwt")!!, o.str("refreshJwt")!!, pds.trimEnd('/'))
     }
+
+    // ---- Moderation preferences (kept in your account, shared with every Bluesky app) ----
+
+    private val prefType = "app.bsky.actor.defs#"
+
+    /** Your account's moderation preferences. */
+    suspend fun moderationPrefs(): Moderation.Prefs {
+        val all = (call("GET", "app.bsky.actor.getPreferences")["preferences"] as? JsonArray).orEmpty().mapNotNull { it.obj }
+        fun of(type: String) = all.lastOrNull { it.str("\$type") == prefType + type }
+        val feedView = all.lastOrNull { it.str("\$type") == prefType + "feedViewPref" && it.str("feed") == "home" }
+        fun flag(o: JsonObject?, key: String, default: Boolean) = (o?.get(key) as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: default
+        return Moderation.Prefs(
+            adultContent = flag(of("adultContentPref"), "enabled", false),
+            rules = all.filter { it.str("\$type") == prefType + "contentLabelPref" && it.str("labelerDid") == null }
+                .mapNotNull { p ->
+                    val label = p.str("label") ?: return@mapNotNull null
+                    val rule = when (p.str("visibility")) { "ignore", "show" -> "SHOW"; "warn" -> "WARN"; "hide" -> "HIDE"; else -> return@mapNotNull null }
+                    Moderation.canonical(label) to rule
+                }.toMap(),
+            mutedWords = (of("mutedWordsPref")?.get("items") as? JsonArray).orEmpty().mapNotNull { e ->
+                val w = e.obj ?: return@mapNotNull null
+                Moderation.MutedWord(
+                    value = w.str("value") ?: return@mapNotNull null,
+                    targets = (w["targets"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content }.ifEmpty { listOf("content", "tag") },
+                    actorTarget = w.str("actorTarget") ?: "all",
+                    expiresAt = w.str("expiresAt"),
+                    id = w.str("id"),
+                )
+            },
+            hiddenPosts = (of("hiddenPostsPref")?.get("items") as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content }.toSet(),
+            hideReplies = flag(feedView, "hideReplies", false),
+            hideRepliesByUnfollowed = flag(feedView, "hideRepliesByUnfollowed", true),
+            hideReposts = flag(feedView, "hideReposts", false),
+            hideQuotePosts = flag(feedView, "hideQuotePosts", false),
+            labelers = (of("labelersPref")?.get("labelers") as? JsonArray).orEmpty().mapNotNull { it.obj.str("did") },
+        )
+    }
+
+    /**
+     * Saves moderation preferences to your account. Preferences this app doesn't manage (saved
+     * feeds, interests, and so on) are kept as they are.
+     */
+    suspend fun saveModerationPrefs(p: Moderation.Prefs) {
+        requireSession()
+        val managed = setOf("adultContentPref", "mutedWordsPref", "hiddenPostsPref").map { prefType + it }
+        val current = (call("GET", "app.bsky.actor.getPreferences")["preferences"] as? JsonArray).orEmpty().mapNotNull { it.obj }
+        val kept = current.filter { o ->
+            val t = o.str("\$type")
+            when {
+                t in managed -> false
+                t == prefType + "contentLabelPref" -> o.str("labelerDid") != null // only Bluesky-wide rules are ours
+                t == prefType + "feedViewPref" -> o.str("feed") != "home"
+                else -> true
+            }
+        }
+        val ours = buildList {
+            add(buildJsonObject { put("\$type", prefType + "adultContentPref"); put("enabled", p.adultContent) })
+            for ((label, _) in Moderation.adultLabels + Moderation.otherLabels) {
+                val visibility = when (p.rules[label]?.let { runCatching { Moderation.Rule.valueOf(it) }.getOrNull() } ?: Moderation.defaultRules[label]) {
+                    Moderation.Rule.SHOW -> "ignore"; Moderation.Rule.WARN -> "warn"; else -> "hide"
+                }
+                add(buildJsonObject { put("\$type", prefType + "contentLabelPref"); put("label", label); put("visibility", visibility) })
+            }
+            add(buildJsonObject {
+                put("\$type", prefType + "mutedWordsPref")
+                put("items", JsonArray(p.mutedWords.map { w ->
+                    buildJsonObject {
+                        put("id", w.id ?: java.util.UUID.randomUUID().toString())
+                        put("value", w.value)
+                        put("targets", JsonArray(w.targets.map { JsonPrimitive(it) }))
+                        put("actorTarget", w.actorTarget)
+                        w.expiresAt?.let { put("expiresAt", it) }
+                    }
+                }))
+            })
+            add(buildJsonObject { put("\$type", prefType + "hiddenPostsPref"); put("items", JsonArray(p.hiddenPosts.map { JsonPrimitive(it) })) })
+            add(buildJsonObject {
+                put("\$type", prefType + "feedViewPref"); put("feed", "home")
+                put("hideReplies", p.hideReplies); put("hideRepliesByUnfollowed", p.hideRepliesByUnfollowed)
+                put("hideReposts", p.hideReposts); put("hideQuotePosts", p.hideQuotePosts)
+            })
+        }
+        call("POST", "app.bsky.actor.putPreferences", body = buildJsonObject { put("preferences", JsonArray(kept + ours)) })
+    }
+
+    /** Accounts you've muted. */
+    suspend fun mutes(): List<Author> =
+        (call("GET", "app.bsky.graph.getMutes", mapOf("limit" to "100"))["mutes"] as? JsonArray).orEmpty().mapNotNull { it.obj?.let(::parseAuthor) }
+
+    suspend fun mute(did: String) { call("POST", "app.bsky.graph.muteActor", body = buildJsonObject { put("actor", did) }) }
+    suspend fun unmute(did: String) { call("POST", "app.bsky.graph.unmuteActor", body = buildJsonObject { put("actor", did) }) }
 
     // ---- Reading ----
 
@@ -291,7 +399,21 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     fun parseAuthor(o: JsonObject): Author? {
         val did = o.str("did") ?: return null
-        return Author(did, o.str("handle") ?: did, o.str("displayName"), o.str("avatar"))
+        val viewer = o["viewer"].obj
+        return Author(
+            did, o.str("handle") ?: did, o.str("displayName"), o.str("avatar"),
+            labels = labelsOf(o),
+            muted = viewer?.get("muted")?.let { (it as? JsonPrimitive)?.content == "true" } == true,
+            blocking = viewer.str("blocking") != null,
+            blockedBy = viewer?.get("blockedBy")?.let { (it as? JsonPrimitive)?.content == "true" } == true,
+            following = viewer.str("following") != null,
+        )
+    }
+
+    /** Label values on a post or account, leaving out negations (labels that were taken back). */
+    private fun labelsOf(o: JsonObject): List<String> = (o["labels"] as? JsonArray).orEmpty().mapNotNull { l ->
+        val label = l.obj ?: return@mapNotNull null
+        if ((label["neg"] as? JsonPrimitive)?.content == "true") null else label.str("val")
     }
 
     private fun parseProfile(o: JsonObject) = Profile(
@@ -324,6 +446,9 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             myLike = o["viewer"].obj.str("like"),
             myRepost = o["viewer"].obj.str("repost"),
             replyRoot = record["reply"].obj?.get("root").obj?.let { r -> Ref(r.str("uri") ?: return@let null, r.str("cid") ?: return@let null) },
+            labels = labelsOf(o),
+            tags = parseFacets(record["facets"]).filter { it.kind == RichText.Facet.Kind.TAG }.map { it.value } +
+                (record["tags"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
         )
     }
 

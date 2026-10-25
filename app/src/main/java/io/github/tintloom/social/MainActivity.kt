@@ -68,6 +68,7 @@ import io.github.tintloom.social.ui.NotificationsScreen
 import io.github.tintloom.social.ui.ProfileScreen
 import io.github.tintloom.social.ui.SearchScreen
 import io.github.tintloom.social.ui.SettingsScreen
+import io.github.tintloom.social.ui.ModerationScreen
 import io.github.tintloom.social.ui.SignInScreen
 import io.github.tintloom.social.ui.SocialTheme
 import io.github.tintloom.social.ui.ThreadScreen
@@ -175,7 +176,8 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                     composable("post/{uri}") { e -> ThreadScreen(Uri.decode(e.arguments?.getString("uri").orEmpty()), nav, onBack = { navController.popBackStack() }) }
                     composable("profile/{actor}") { e -> ProfileScreen(Uri.decode(e.arguments?.getString("actor").orEmpty()), nav, onBack = { navController.popBackStack() }) }
                     composable("signin") { SignInScreen(onDone = { navController.popBackStack() }, onBack = { navController.popBackStack() }) }
-                    composable("settings") { SettingsScreen(onBack = { navController.popBackStack() }, onSignIn = { navController.navigate("signin") }) }
+                    composable("settings") { SettingsScreen(onBack = { navController.popBackStack() }, onSignIn = { navController.navigate("signin") }, onModeration = { navController.navigate("moderation") }) }
+                    composable("moderation") { ModerationScreen(onBack = { navController.popBackStack() }) }
                 }
             }
         }

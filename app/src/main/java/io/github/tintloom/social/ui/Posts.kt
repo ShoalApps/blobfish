@@ -48,6 +48,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import io.github.tintloom.social.data.Moderation
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -200,8 +208,28 @@ fun PostCard(
     repostedBy: Author? = null,
     replyTo: Author? = null,
     big: Boolean = false,
+    /** In threads a hidden post leaves a note, so the conversation still makes sense. */
+    noteWhenHidden: Boolean = false,
 ) {
-    Column(modifier.fillMaxWidth().clickable(enabled = !big) { nav.post(post.uri) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    val prefs by Graph.store.moderation.collectAsState()
+    val signedIn = Graph.store.session.collectAsState().value != null
+    val decision = remember(post, prefs, signedIn) { Moderation.decide(post, prefs, signedIn) }
+    var revealed by remember(post.uri) { mutableStateOf(false) }
+    if (decision is Moderation.Decision.Hide && !revealed) {
+        if (noteWhenHidden) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.VisibilityOff, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(decision.reason, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp).weight(1f))
+                // Your own choices can be undone here; moderators' and blocks can't.
+                if (decision.reason == "Post hidden by you" || decision.reason.startsWith("Muted word")) TextButton(onClick = { revealed = true }) { Text("Show") }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+        }
+        return
+    }
+    val covered = decision is Moderation.Decision.Warn && !revealed
+    val blurMedia = decision is Moderation.Decision.BlurMedia && !revealed
+    Column(modifier.fillMaxWidth().clickable(enabled = !big && !covered) { nav.post(post.uri) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
         repostedBy?.let {
             Row(Modifier.padding(start = 46.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Repeat, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -224,13 +252,32 @@ fun PostCard(
                 replyTo?.let {
                     Text("Replying to @${it.handle}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                if (covered) {
+                    ContentCover((decision as Moderation.Decision.Warn).reason, Modifier.padding(top = 8.dp)) { revealed = true }
+                    Actions(post, nav)
+                    return@Column
+                }
                 if (post.text.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     RichTextView(post.text, post.facets, nav)
                 }
-                if (post.images.isNotEmpty()) Images(post, Modifier.padding(top = 10.dp))
-                post.card?.let { LinkCardView(it, Modifier.padding(top = 10.dp)) }
+                if (blurMedia && (post.images.isNotEmpty() || post.card != null)) {
+                    ContentCover((decision as Moderation.Decision.BlurMedia).reason, Modifier.padding(top = 10.dp), media = true) { revealed = true }
+                } else {
+                    if (post.images.isNotEmpty()) Images(post, Modifier.padding(top = 10.dp))
+                    post.card?.let { LinkCardView(it, Modifier.padding(top = 10.dp)) }
+                }
                 post.quote?.let { q ->
+                    val quoteDecision = remember(q, prefs, signedIn) { Moderation.decide(q, prefs, signedIn) }
+                    if (quoteDecision is Moderation.Decision.Hide) {
+                        Text(
+                            "Quoted post hidden: ${quoteDecision.reason}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 10.dp).fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)).padding(12.dp),
+                        )
+                        return@let
+                    }
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color.Transparent,
@@ -242,7 +289,8 @@ fun PostCard(
                                 Text(q.author.name, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
                             }
                             Spacer(Modifier.height(4.dp))
-                            RichTextView(q.text, q.facets, nav, maxLines = 6)
+                            if (quoteDecision is Moderation.Decision.Warn) Text("Content warning: ${quoteDecision.reason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            else RichTextView(q.text, q.facets, nav, maxLines = 6)
                         }
                     }
                 }
@@ -356,6 +404,63 @@ private fun Actions(post: Post, nav: Nav) {
         IconButton(onClick = {
             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, webUrl(post)), "Share"))
         }) { Icon(Icons.Rounded.Share, "Share", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        PostMenu(post)
+    }
+}
+
+/** More actions for a post: hide it, or mute its author. Both are saved to your account. */
+@Composable
+private fun PostMenu(post: Post) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val signedIn = Graph.store.session.collectAsState().value != null
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.Rounded.MoreVert, "More", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Hide post") },
+                leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null) },
+                onClick = {
+                    open = false
+                    scope.launch {
+                        Graph.changeModeration { it.copy(hiddenPosts = it.hiddenPosts + post.uri) }?.let { toast(context, it) }
+                            ?: toast(context, "Post hidden. Undo in Settings → Moderation")
+                    }
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Mute @${post.author.handle}") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.VolumeOff, null) },
+                onClick = {
+                    open = false
+                    if (!signedIn) { toast(context, "Sign in to mute accounts"); return@DropdownMenuItem }
+                    scope.launch {
+                        runCatching { Graph.atp.mute(post.author.did) }
+                            .onSuccess { toast(context, "Muted. Their posts are hidden behind a warning; unmute in Settings → Moderation") }
+                            .onFailure { toast(context, it.message ?: "Couldn't mute") }
+                    }
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Covers a post (or just its pictures) that a moderation rule says to warn about, with the reason
+ * and a button to show it anyway.
+ */
+@Composable
+private fun ContentCover(reason: String, modifier: Modifier = Modifier, media: Boolean = false, onShow: () -> Unit) {
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Info, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                Text(reason, style = MaterialTheme.typography.titleSmall)
+                if (media) Text("The pictures are hidden", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onShow) { Text("Show") }
+        }
     }
 }
 
