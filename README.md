@@ -1,6 +1,6 @@
-# Swordfish Social
+# Blobfish
 
-A Material You client for Bluesky, part of [Swordfish](https://swordfishapps.github.io): open-source Android apps
+A Material You client for Bluesky, part of [Shoal](https://shoalapps.github.io): open-source Android apps
 that take on your wallpaper's colours.
 
 - Jetpack Compose and Material 3 Expressive: wallpaper colours, a navigation rail on big screens,
@@ -13,8 +13,8 @@ that take on your wallpaper's colours.
 
 ## Getting the APK
 
-Every push to `main` builds a signed release. Install `SwordfishSocial.apk` from the newest
-[release](https://github.com/SwordfishApps/social/releases/latest).
+Every push to `main` builds a signed release. Install `Blobfish.apk` from the newest
+[release](https://github.com/ShoalApps/blobfish/releases/latest).
 
 ## Privacy
 
@@ -25,4 +25,4 @@ asks GitHub whether there's a newer version. Your session is stored only on your
 
 Free software under the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE).
 
-Swordfish Social is not affiliated with, endorsed by or sponsored by Bluesky Social PBC.
+Blobfish is not affiliated with, endorsed by or sponsored by Bluesky Social PBC.

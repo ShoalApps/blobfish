@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social
+package io.github.shoalapps.blobfish
 
 import android.content.Context
 import android.net.Uri
@@ -6,7 +6,7 @@ import android.webkit.CookieManager
 import org.json.JSONObject
 
 /**
- * Accounts you signed into in Swordfish Manager. The Manager shares them through a provider only
+ * Accounts you signed into in Shoal. The Manager shares them through a provider only
  * apps signed with the same key can read; this app picks them up on launch and on return.
  */
 object ManagerAccounts {
@@ -19,7 +19,7 @@ object ManagerAccounts {
     )
 
     private fun authority(context: Context) =
-        "io.github.swordfishapps.manager" + (if (context.packageName.endsWith(".debug")) ".debug" else "") + ".accounts"
+        "io.github.shoalapps.shoal" + (if (context.packageName.endsWith(".debug")) ".debug" else "") + ".accounts"
 
     /** The Manager's accounts, or null if it isn't installed (or is too old to share them). */
     fun read(context: Context): Snapshot? = runCatching {

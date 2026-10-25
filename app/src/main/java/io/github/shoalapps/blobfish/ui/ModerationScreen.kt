@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social.ui
+package io.github.shoalapps.blobfish.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,9 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import io.github.swordfishapps.social.Graph
-import io.github.swordfishapps.social.data.Author
-import io.github.swordfishapps.social.data.Moderation
+import io.github.shoalapps.blobfish.Graph
+import io.github.shoalapps.blobfish.data.Author
+import io.github.shoalapps.blobfish.data.Moderation
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant

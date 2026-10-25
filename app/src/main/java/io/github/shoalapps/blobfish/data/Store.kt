@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social.data
+package io.github.shoalapps.blobfish.data
 
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow

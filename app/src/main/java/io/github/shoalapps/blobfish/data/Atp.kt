@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social.data
+package io.github.shoalapps.blobfish.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

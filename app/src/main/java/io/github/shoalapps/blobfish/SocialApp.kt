@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social
+package io.github.shoalapps.blobfish
 
 import android.app.Application
 import androidx.compose.runtime.getValue
@@ -10,10 +10,10 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
-import io.github.swordfishapps.social.data.Atp
-import io.github.swordfishapps.social.data.Moderation
-import io.github.swordfishapps.social.data.Store
-import io.github.swordfishapps.social.data.Updater
+import io.github.shoalapps.blobfish.data.Atp
+import io.github.shoalapps.blobfish.data.Moderation
+import io.github.shoalapps.blobfish.data.Store
+import io.github.shoalapps.blobfish.data.Updater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,14 +47,14 @@ object Graph {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", "SwordfishSocial/0.1 (Android)").build()) }
+            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", "Blobfish/0.1 (Android)").build()) }
             .build()
     }
     val store by lazy { Store(app) }
     val atp by lazy { Atp(http, store) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Takes up accounts signed into in Swordfish Manager, when they've changed. */
+    /** Takes up accounts signed into in Shoal, when they've changed. */
     fun pullManagerAccounts() {
         val s = ManagerAccounts.read(app) ?: return
         if (!ManagerAccounts.changed(app, s)) return
@@ -112,8 +112,8 @@ object Graph {
     }
 
     fun checkForUpdate(force: Boolean = false) {
-        // Swordfish Manager handles updates when it is installed.
-        if (!force && io.github.swordfishapps.social.SwordfishManager.installed(app)) return
+        // Shoal handles updates when it is installed.
+        if (!force && io.github.shoalapps.blobfish.ShoalManager.installed(app)) return
         if (!Updater.canUpdate(app)) {
             if (force) Update.message = "Development builds don't update themselves"
             return

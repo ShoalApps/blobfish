@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social.ui
+package io.github.shoalapps.blobfish.ui
 
 import android.annotation.SuppressLint
 import android.content.Context

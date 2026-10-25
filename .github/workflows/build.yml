@@ -21,25 +21,25 @@ jobs:
 
       - name: Unpack the release signing key
         env:
-          KEYSTORE_BASE64: ${{ secrets.SWORDFISH_KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.SHOAL_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "SWORDFISH_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "SHOAL_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           fi
 
       - name: Build release APK and run unit tests
         env:
-          SWORDFISH_KEYSTORE_PASSWORD: ${{ secrets.SWORDFISH_KEYSTORE_PASSWORD }}
-          SWORDFISH_KEY_ALIAS: ${{ secrets.SWORDFISH_KEY_ALIAS }}
+          SHOAL_KEYSTORE_PASSWORD: ${{ secrets.SHOAL_KEYSTORE_PASSWORD }}
+          SHOAL_KEY_ALIAS: ${{ secrets.SHOAL_KEY_ALIAS }}
         run: ./gradlew assembleRelease testDebugUnitTest --stacktrace
 
       - name: Publish release
-        run: cp app/build/outputs/apk/release/app-release.apk SwordfishSocial.apk
+        run: cp app/build/outputs/apk/release/app-release.apk Blobfish.apk
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: build-${{ github.run_number }}
-          name: Swordfish Social build ${{ github.run_number }}
-          body: Install SwordfishSocial.apk below. Swordfish Social is free software under the GPL-3.0 and is not affiliated with Bluesky Social PBC.
-          files: SwordfishSocial.apk
+          name: Blobfish build ${{ github.run_number }}
+          body: Install Blobfish.apk below. Blobfish is free software under the GPL-3.0 and is not affiliated with Bluesky Social PBC.
+          files: Blobfish.apk
           make_latest: true

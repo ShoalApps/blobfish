@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social
+package io.github.shoalapps.blobfish
 
 import android.content.Context
 import android.net.Uri
@@ -6,7 +6,7 @@ import android.webkit.CookieManager
 import org.json.JSONObject
 
 /**
- * Swordfish apps used to be called Tintloom and had different package names, so Android sees them
+ * Shoal apps used to be called Tintloom and had different package names, so Android sees them
  * as new apps. On first launch this brings across the old app's settings, history and sign-ins,
  * through a hand-off only apps signed with the same key can read.
  */
@@ -47,7 +47,7 @@ object DataMover {
         if (!marker.getBoolean("done", false) || marker.getBoolean("offered", false) || !oldInstalled(activity)) return
         marker.edit().putBoolean("offered", true).apply()
         android.app.AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Welcome to Swordfish")
+            .setTitle("Welcome to Blobfish")
             .setMessage(if (justMoved) "Your settings, history and sign-ins came across from the Tintloom version. You can uninstall it now; it won't get updates any more."
                 else "The Tintloom version of this app is still installed. It won't get updates any more, so you can uninstall it.")
             .setPositiveButton("Uninstall it") { _, _ ->
@@ -60,7 +60,7 @@ object DataMover {
     private fun import(context: Context, all: JSONObject) {
         val prefs = all.optJSONObject("prefs") ?: JSONObject()
         for (file in prefs.keys()) {
-            if (file == "moved" || file == "swordfish_notice" || file.startsWith("WebView")) continue
+            if (file == "moved" || file == "shoal_notice" || file.startsWith("WebView")) continue
             val values = prefs.getJSONObject(file)
             val edit = context.getSharedPreferences(file, Context.MODE_PRIVATE).edit()
             for (key in values.keys()) {

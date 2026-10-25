@@ -6,27 +6,27 @@
     <!-- Installing updates downloaded from the project's GitHub releases; Android always asks first. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Swordfish Manager takes over updates when it is installed. -->
+    <!-- Shoal takes over updates when it is installed. -->
     <queries>
-        <package android:name="io.github.swordfishapps.manager" />
+        <package android:name="io.github.shoalapps.shoal" />
     </queries>
 
     <!-- Reading the Tintloom version's data once, after the rename. Signature-only: both apps share the release key. -->
     <permission
-        android:name="io.github.swordfishapps.permission.MOVE_DATA"
+        android:name="io.github.shoalapps.permission.MOVE_DATA"
         android:protectionLevel="signature" />
-    <uses-permission android:name="io.github.swordfishapps.permission.MOVE_DATA" />
+    <uses-permission android:name="io.github.shoalapps.permission.MOVE_DATA" />
     <queries>
         <provider android:authorities="io.github.tintloom.social.movedata" />
         <provider android:authorities="io.github.tintloom.social.debug.movedata" />
         <package android:name="io.github.tintloom.social" />
     </queries>
 
-    <!-- Accounts from Swordfish Manager (signature-protected). -->
-    <uses-permission android:name="io.github.swordfishapps.permission.ACCOUNTS" />
+    <!-- Accounts from Shoal (signature-protected). -->
+    <uses-permission android:name="io.github.shoalapps.permission.ACCOUNTS" />
     <queries>
-        <provider android:authorities="io.github.swordfishapps.manager.accounts" />
-        <provider android:authorities="io.github.swordfishapps.manager.debug.accounts" />
+        <provider android:authorities="io.github.shoalapps.shoal.accounts" />
+        <provider android:authorities="io.github.shoalapps.shoal.debug.accounts" />
     </queries>
 
     <application

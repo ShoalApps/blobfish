@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.swordfishapps.social.ui
+package io.github.shoalapps.blobfish.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.animateFloat
@@ -98,19 +98,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
-import io.github.swordfishapps.social.Graph
-import io.github.swordfishapps.social.data.Moderation
-import io.github.swordfishapps.social.data.AtpException
-import io.github.swordfishapps.social.data.Author
-import io.github.swordfishapps.social.data.FeedItem
-import io.github.swordfishapps.social.data.Notification
-import io.github.swordfishapps.social.data.Page
-import io.github.swordfishapps.social.data.Post
-import io.github.swordfishapps.social.data.Profile
-import io.github.swordfishapps.social.data.Thread
-import io.github.swordfishapps.social.data.ThreadNode
-import io.github.swordfishapps.social.data.compact
-import io.github.swordfishapps.social.data.shortAgo
+import io.github.shoalapps.blobfish.Graph
+import io.github.shoalapps.blobfish.data.Moderation
+import io.github.shoalapps.blobfish.data.AtpException
+import io.github.shoalapps.blobfish.data.Author
+import io.github.shoalapps.blobfish.data.FeedItem
+import io.github.shoalapps.blobfish.data.Notification
+import io.github.shoalapps.blobfish.data.Page
+import io.github.shoalapps.blobfish.data.Post
+import io.github.shoalapps.blobfish.data.Profile
+import io.github.shoalapps.blobfish.data.Thread
+import io.github.shoalapps.blobfish.data.ThreadNode
+import io.github.shoalapps.blobfish.data.compact
+import io.github.shoalapps.blobfish.data.shortAgo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -237,15 +237,15 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
     }
 }
 
-/** "Swordfish" with the swordfish on the app's cookie mark. */
+/** "Blobfish" with the blobfish on the app's cookie mark. */
 @Composable
 fun Wordmark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val shape = remember { PolygonShape(MaterialShapes.Cookie12Sided) }
         Box(Modifier.size(30.dp).clip(shape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-            Icon(androidx.compose.ui.res.painterResource(io.github.swordfishapps.social.R.drawable.ic_launcher_mono), null, Modifier.requiredSize(50.dp), tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(androidx.compose.ui.res.painterResource(io.github.shoalapps.blobfish.R.drawable.ic_launcher_mono), null, Modifier.requiredSize(50.dp), tint = MaterialTheme.colorScheme.onPrimary)
         }
-        Text("Swordfish", style = MaterialTheme.typography.titleLargeEmphasized, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = 8.dp))
+        Text("Blobfish", style = MaterialTheme.typography.titleLargeEmphasized, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -443,7 +443,7 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
     val context = LocalContext.current
     // Tapping the banner or picture shows it full size.
     var viewing by remember { mutableStateOf<String?>(null) }
-    viewing?.let { url -> ImageViewer(listOf(io.github.swordfishapps.social.data.Image(url, url, "", null)), 0) { viewing = null } }
+    viewing?.let { url -> ImageViewer(listOf(io.github.shoalapps.blobfish.data.Image(url, url, "", null)), 0) { viewing = null } }
     Column {
         Box {
             AsyncImage(
@@ -513,7 +513,7 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
 }
 
 @Composable
-private fun ProfileLinkChip(l: io.github.swordfishapps.social.data.ProfileLink) {
+private fun ProfileLinkChip(l: io.github.shoalapps.blobfish.data.ProfileLink) {
     val context = LocalContext.current
     val host = remember(l.url) { runCatching { android.net.Uri.parse(l.url).host?.removePrefix("www.") }.getOrNull().orEmpty() }
     val payment = host.endsWith("patreon.com") || host.endsWith("ko-fi.com")
@@ -579,7 +579,7 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
     }
 }
 
-/** The profile picture in a slowly morphing, turning Material shape, like Swordfish Video's About page. */
+/** The profile picture in a slowly morphing, turning Material shape, like Anglerfish's About page. */
 @Composable
 fun MorphingAvatar(url: String?, size: androidx.compose.ui.unit.Dp) {
     val morph = remember { androidx.graphics.shapes.Morph(MaterialShapes.Cookie12Sided, MaterialShapes.Clover8Leaf) }
@@ -811,24 +811,24 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
             }
             group("X") {
                 row { sh -> Toggle("X tab", "x.com in its own tab, signed in on X's own page", s.showX, sh) { v -> store.updateSettings { it.copy(showX = v) } } }
-                if (s.showX && io.github.swordfishapps.social.ui.XView.signedIn) {
-                    row { sh -> Link("Sign out of X", null, sh) { io.github.swordfishapps.social.ui.XView.signOut() } }
+                if (s.showX && io.github.shoalapps.blobfish.ui.XView.signedIn) {
+                    row { sh -> Link("Sign out of X", null, sh) { io.github.shoalapps.blobfish.ui.XView.signOut() } }
                 }
             }
             group("Moderation") {
                 row { sh -> Link("Moderation", "Content filters, muted words, hidden posts, muted accounts, replies and reposts", sh, onModeration) }
             }
             group("Updates") {
-                if (io.github.swordfishapps.social.SwordfishManager.installed(context)) {
-                    row { sh -> Link("Managed by Swordfish Manager", "Updates are checked and installed by Swordfish Manager", sh) { io.github.swordfishapps.social.SwordfishManager.checkForUpdates(context) } }
+                if (io.github.shoalapps.blobfish.ShoalManager.installed(context)) {
+                    row { sh -> Link("Managed by Shoal", "Updates are checked and installed by Shoal", sh) { io.github.shoalapps.blobfish.ShoalManager.checkForUpdates(context) } }
                 } else {
                     row { sh -> Toggle("Check for updates", "Look for a new version on GitHub once a day", s.autoUpdate, sh) { v -> store.updateSettings { it.copy(autoUpdate = v) } } }
                 }
-                row { sh -> Link("Check for updates now", "Version $version · opens Swordfish Manager", sh) { io.github.swordfishapps.social.SwordfishManager.checkForUpdates(context) } }
+                row { sh -> Link("Check for updates now", "Version $version · opens Shoal", sh) { io.github.shoalapps.blobfish.ShoalManager.checkForUpdates(context) } }
             }
             group("About") {
-                row { sh -> Link("Source code", "github.com/SwordfishApps/social", sh) { openLink(context, "https://github.com/SwordfishApps/social") } }
-                row { sh -> Link("Swordfish", "swordfishapps.github.io: all the apps and their credits", sh) { openLink(context, "https://swordfishapps.github.io") } }
+                row { sh -> Link("Source code", "github.com/ShoalApps/blobfish", sh) { openLink(context, "https://github.com/ShoalApps/blobfish") } }
+                row { sh -> Link("Shoal", "shoalapps.github.io: all the apps and their credits", sh) { openLink(context, "https://shoalapps.github.io") } }
                 row { sh ->
                     Link("GNU GPL v3 or later", "Free software. Not affiliated with or endorsed by Bluesky Social PBC.", sh) {
                         openLink(context, "https://www.gnu.org/licenses/gpl-3.0.html")

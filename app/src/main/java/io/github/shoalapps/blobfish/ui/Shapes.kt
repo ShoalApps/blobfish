@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.swordfishapps.social.ui
+package io.github.shoalapps.blobfish.ui
 
 import android.graphics.Matrix
 import android.graphics.RectF

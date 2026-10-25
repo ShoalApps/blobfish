@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social.data
+package io.github.shoalapps.blobfish.data
 
 /**
  * Turns a post's text into blocks, mu-style: fenced code blocks (```lang … ```) become their own

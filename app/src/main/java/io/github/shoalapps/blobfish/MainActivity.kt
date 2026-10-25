@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.swordfishapps.social
+package io.github.shoalapps.blobfish
 
 import android.content.Intent
 import android.net.Uri
@@ -65,19 +65,19 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import io.github.swordfishapps.social.data.Post
-import io.github.swordfishapps.social.ui.Composer
-import io.github.swordfishapps.social.ui.HomeScreen
-import io.github.swordfishapps.social.ui.Nav
-import io.github.swordfishapps.social.ui.NotificationsScreen
-import io.github.swordfishapps.social.ui.ProfileScreen
-import io.github.swordfishapps.social.ui.SearchScreen
-import io.github.swordfishapps.social.ui.SettingsScreen
-import io.github.swordfishapps.social.ui.ModerationScreen
-import io.github.swordfishapps.social.ui.SignInScreen
-import io.github.swordfishapps.social.ui.SocialTheme
-import io.github.swordfishapps.social.ui.ThreadScreen
-import io.github.swordfishapps.social.ui.YouScreen
+import io.github.shoalapps.blobfish.data.Post
+import io.github.shoalapps.blobfish.ui.Composer
+import io.github.shoalapps.blobfish.ui.HomeScreen
+import io.github.shoalapps.blobfish.ui.Nav
+import io.github.shoalapps.blobfish.ui.NotificationsScreen
+import io.github.shoalapps.blobfish.ui.ProfileScreen
+import io.github.shoalapps.blobfish.ui.SearchScreen
+import io.github.shoalapps.blobfish.ui.SettingsScreen
+import io.github.shoalapps.blobfish.ui.ModerationScreen
+import io.github.shoalapps.blobfish.ui.SignInScreen
+import io.github.shoalapps.blobfish.ui.SocialTheme
+import io.github.shoalapps.blobfish.ui.ThreadScreen
+import io.github.shoalapps.blobfish.ui.YouScreen
 
 private data class Tab(val route: String, val label: String, val on: ImageVector, val off: ImageVector)
 
@@ -212,9 +212,9 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                     composable("signin") { SignInScreen(onDone = { navController.popBackStack() }, onBack = { navController.popBackStack() }) }
                     composable("settings") { SettingsScreen(onBack = { navController.popBackStack() }, onSignIn = { navController.navigate("signin") }, onModeration = { navController.navigate("moderation") }) }
                     composable("moderation") { ModerationScreen(onBack = { navController.popBackStack() }) }
-                    composable("people/{kind}/{actor}") { e -> io.github.swordfishapps.social.ui.PeopleScreen(e.arguments?.getString("kind").orEmpty(), Uri.decode(e.arguments?.getString("actor").orEmpty()), nav, onBack = { navController.popBackStack() }) }
-                    composable("editprofile") { io.github.swordfishapps.social.ui.EditProfileScreen(onBack = { navController.popBackStack() }) }
-                    composable("x") { io.github.swordfishapps.social.ui.XScreen() }
+                    composable("people/{kind}/{actor}") { e -> io.github.shoalapps.blobfish.ui.PeopleScreen(e.arguments?.getString("kind").orEmpty(), Uri.decode(e.arguments?.getString("actor").orEmpty()), nav, onBack = { navController.popBackStack() }) }
+                    composable("editprofile") { io.github.shoalapps.blobfish.ui.EditProfileScreen(onBack = { navController.popBackStack() }) }
+                    composable("x") { io.github.shoalapps.blobfish.ui.XScreen() }
                 }
             }
         }
@@ -230,7 +230,7 @@ private fun UpdatePrompt(modifier: Modifier) {
     val message = Graph.Update.message
     LaunchedEffect(available) {
         if (available == null) return@LaunchedEffect
-        val r = host.showSnackbar("A new version of Swordfish Social is ready", actionLabel = "Update", withDismissAction = true, duration = SnackbarDuration.Indefinite)
+        val r = host.showSnackbar("A new version of Blobfish is ready", actionLabel = "Update", withDismissAction = true, duration = SnackbarDuration.Indefinite)
         if (r == SnackbarResult.ActionPerformed) Graph.installUpdate() else Graph.Update.available = null
     }
     LaunchedEffect(message) {

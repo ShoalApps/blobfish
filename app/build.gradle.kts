@@ -7,28 +7,28 @@ plugins {
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
-    namespace = "io.github.swordfishapps.social"
+    namespace = "io.github.shoalapps.blobfish"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.swordfishapps.social"
+        applicationId = "io.github.shoalapps.blobfish"
         minSdk = 26
         targetSdk = 36
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
-        resValue("string", "app_name", "Swordfish Social")
+        resValue("string", "app_name", "Blobfish")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // The release key lives only in GitHub Actions secrets, never in the repo.
-    val releaseKey = System.getenv("SWORDFISH_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+    val releaseKey = System.getenv("SHOAL_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
     signingConfigs {
         if (releaseKey != null) {
             create("release") {
                 storeFile = releaseKey
-                storePassword = System.getenv("SWORDFISH_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("SWORDFISH_KEY_ALIAS")
-                keyPassword = System.getenv("SWORDFISH_KEYSTORE_PASSWORD")
+                storePassword = System.getenv("SHOAL_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SHOAL_KEY_ALIAS")
+                keyPassword = System.getenv("SHOAL_KEYSTORE_PASSWORD")
             }
         }
     }
@@ -41,7 +41,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "Swordfish Social Dev")
+            resValue("string", "app_name", "Blobfish Dev")
         }
     }
 

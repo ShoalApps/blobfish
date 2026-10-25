@@ -1,6 +1,6 @@
-package io.github.swordfishapps.social.data
+package io.github.shoalapps.blobfish.data
 
-import io.github.swordfishapps.social.data.Moderation.Decision
+import io.github.shoalapps.blobfish.data.Moderation.Decision
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

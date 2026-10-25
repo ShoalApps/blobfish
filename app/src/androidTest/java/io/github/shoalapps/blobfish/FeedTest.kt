@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social
+package io.github.shoalapps.blobfish
 
 import androidx.compose.ui.test.SemanticsNodeInteractionCollection
 import androidx.compose.ui.test.hasContentDescription

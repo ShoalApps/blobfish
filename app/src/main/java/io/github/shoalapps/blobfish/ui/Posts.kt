@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package io.github.swordfishapps.social.ui
+package io.github.shoalapps.blobfish.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -55,7 +55,7 @@ import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
-import io.github.swordfishapps.social.data.Moderation
+import io.github.shoalapps.blobfish.data.Moderation
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -94,13 +94,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import io.github.swordfishapps.social.Graph
-import io.github.swordfishapps.social.data.Author
-import io.github.swordfishapps.social.data.Post
-import io.github.swordfishapps.social.data.RichText
-import io.github.swordfishapps.social.data.compact
-import io.github.swordfishapps.social.data.shortAgo
-import io.github.swordfishapps.social.data.webUrl
+import io.github.shoalapps.blobfish.Graph
+import io.github.shoalapps.blobfish.data.Author
+import io.github.shoalapps.blobfish.data.Post
+import io.github.shoalapps.blobfish.data.RichText
+import io.github.shoalapps.blobfish.data.compact
+import io.github.shoalapps.blobfish.data.shortAgo
+import io.github.shoalapps.blobfish.data.webUrl
 import kotlinx.coroutines.launch
 
 /** Where links inside posts lead. */
@@ -474,7 +474,7 @@ private fun Images(post: Post, modifier: Modifier) {
 }
 
 @Composable
-private fun LinkCardView(card: io.github.swordfishapps.social.data.LinkCard, modifier: Modifier) {
+private fun LinkCardView(card: io.github.shoalapps.blobfish.data.LinkCard, modifier: Modifier) {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(16.dp),

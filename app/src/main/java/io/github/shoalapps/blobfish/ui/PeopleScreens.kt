@@ -1,4 +1,4 @@
-package io.github.swordfishapps.social.ui
+package io.github.shoalapps.blobfish.ui
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -49,9 +49,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
-import io.github.swordfishapps.social.Graph
-import io.github.swordfishapps.social.data.Author
-import io.github.swordfishapps.social.data.Profile
+import io.github.shoalapps.blobfish.Graph
+import io.github.shoalapps.blobfish.data.Author
+import io.github.shoalapps.blobfish.data.Profile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
