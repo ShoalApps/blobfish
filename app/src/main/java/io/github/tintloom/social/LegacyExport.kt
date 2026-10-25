@@ -11,7 +11,7 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Hands this app's settings, history and sign-ins to its Swordfish replacement, which has a new
+ * Hands this app's settings, history and sign-ins to its Blobfish replacement, which has a new
  * package name and so can't read them itself. Only apps signed with the same release key may ask
  * (a signature permission), so nothing else on the phone can read this.
  */
@@ -57,17 +57,17 @@ class LegacyExport : ContentProvider() {
     override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?) = 0
 }
 
-/** Shown once: the app now lives on as Swordfish Social, which brings your data across. */
-object SwordfishNotice {
+/** Shown once: the app now lives on as Blobfish, which brings your data across. */
+object ShoalNotice {
     fun show(activity: android.app.Activity) {
-        val prefs = activity.getSharedPreferences("swordfish_notice", 0)
+        val prefs = activity.getSharedPreferences("shoal_notice", 0)
         if (prefs.getBoolean("shown", false) || activity.packageName.endsWith(".debug")) return
         prefs.edit().putBoolean("shown", true).apply()
         android.app.AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Tintloom is now Swordfish")
-            .setMessage("This app has a new name and lives on as Swordfish Social. Install it and your settings, history and sign-ins come with you. This version won't get updates any more.")
-            .setPositiveButton("Get Swordfish Social") { _, _ ->
-                runCatching { activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/SwordfishApps/social/releases/latest/download/SwordfishSocial.apk"))) }
+            .setTitle("Tintloom is now Blobfish")
+            .setMessage("This app has a new name and lives on as Blobfish. Install it and your settings, history and sign-ins come with you. This version won't get updates any more.")
+            .setPositiveButton("Get Blobfish") { _, _ ->
+                runCatching { activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/ShoalApps/blobfish/releases/latest/download/Blobfish.apk"))) }
             }
             .setNegativeButton("Later", null)
             .show()
