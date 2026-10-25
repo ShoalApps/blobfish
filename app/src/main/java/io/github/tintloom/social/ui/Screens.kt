@@ -174,9 +174,10 @@ fun <T> PagedList(
 }
 
 @Composable
-private fun FeedRow(item: FeedItem, nav: Nav) {
+private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
     val prefs = Graph.store.moderation.collectAsState().value
-    if (Moderation.hiddenInFeed(item, prefs)) return
+    // Reply, repost and quote options are for the Following timeline only, as in Bluesky's app.
+    if (following && Moderation.hiddenInFeed(item, prefs)) return
     PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo)
 }
 
@@ -210,7 +211,7 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
         Box(Modifier.padding(top = pad.calculateTopPadding())) {
             if (session != null && tab == 0) {
                 val following = viewModel(key = "following-${session!!.did}") { PagedVm { c -> Graph.atp.timeline(c) } }
-                PagedList(following, empty = "Follow some people to fill your timeline") { FeedRow(it, nav) }
+                PagedList(following, empty = "Follow some people to fill your timeline") { FeedRow(it, nav, following = true) }
             } else {
                 PagedList(discover) { FeedRow(it, nav) }
             }
@@ -721,6 +722,16 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                         openLink(context, "https://www.gnu.org/licenses/gpl-3.0.html")
                     }
                 }
+            }
+            group("Built with") {
+                listOf(
+                    "AT Protocol" to "https://atproto.com",
+                    "mu (rich formatting idea)" to "https://mu.social",
+                    "Jetpack Compose & Material 3" to "https://developer.android.com/compose",
+                    "OkHttp" to "https://square.github.io/okhttp/",
+                    "Coil" to "https://coil-kt.github.io/coil/",
+                    "kotlinx.serialization" to "https://github.com/Kotlin/kotlinx.serialization",
+                ).forEach { (name, url) -> row { sh -> Link(name, null, sh) { openLink(context, url) } } }
             }
         }
     }
