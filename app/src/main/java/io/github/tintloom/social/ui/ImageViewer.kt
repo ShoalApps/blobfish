@@ -71,7 +71,11 @@ fun ImageViewer(images: List<Image>, start: Int, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val pager = rememberPagerState(initialPage = start) { images.size }
     val zoomed = remember { mutableStateMapOf<Int, Boolean>() }
+    // The buttons show briefly when a photo opens, then step aside so it isn't darkened; tap to bring them back.
     var chrome by remember { mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(chrome, pager.currentPage) {
+        if (chrome) { kotlinx.coroutines.delay(2_500); chrome = false }
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -92,7 +96,7 @@ fun ImageViewer(images: List<Image>, start: Int, onDismiss: () -> Unit) {
                 // A soft fade behind the buttons keeps them readable over bright photos.
                 Box(
                     Modifier.fillMaxWidth().height(120.dp)
-                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = .55f), Color.Transparent))),
+                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = .35f), Color.Transparent))),
                 )
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Row(

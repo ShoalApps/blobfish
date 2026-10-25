@@ -28,6 +28,7 @@ class SocialApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         Graph.app = this
         Graph.syncModeration()
+        Graph.syncProfile()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
@@ -51,6 +52,22 @@ object Graph {
     val store by lazy { Store(app) }
     val atp by lazy { Atp(http, store) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Your profile picture, for the You tab. */
+    var myAvatar by mutableStateOf<String?>(null)
+
+    /** Loads your profile picture (on start and after signing in); kept for next time. */
+    fun syncProfile() {
+        val s = store.session.value
+        if (s == null) { myAvatar = null; return }
+        myAvatar = myAvatar ?: app.getSharedPreferences("social", android.content.Context.MODE_PRIVATE).getString("avatar:${s.did}", null)
+        scope.launch {
+            runCatching { atp.profile(s.did) }.onSuccess { p ->
+                myAvatar = p.author.avatar
+                app.getSharedPreferences("social", android.content.Context.MODE_PRIVATE).edit().putString("avatar:${s.did}", p.author.avatar).apply()
+            }
+        }
+    }
 
     /** Fetches your account's moderation preferences (on start and after signing in). */
     fun syncModeration() {

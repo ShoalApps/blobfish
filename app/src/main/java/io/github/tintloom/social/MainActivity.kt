@@ -5,6 +5,10 @@ package io.github.tintloom.social
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -83,6 +87,23 @@ private val tabs = listOf(
     Tab("you", "You", Icons.Rounded.AccountCircle, Icons.Outlined.AccountCircle),
 )
 
+/** The You tab shows your Bluesky profile picture when you're signed in. */
+@Composable
+private fun TabIcon(t: Tab, selected: Boolean) {
+    val avatar = Graph.myAvatar
+    val signedIn = Graph.store.session.collectAsState().value != null
+    if (t.route == "you" && signedIn && avatar != null) {
+        coil3.compose.AsyncImage(
+            model = avatar,
+            contentDescription = t.label,
+            modifier = Modifier.size(26.dp).clip(CircleShape)
+                .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier),
+        )
+    } else {
+        Icon(if (selected) t.on else t.off, t.label)
+    }
+}
+
 class MainActivity : ComponentActivity() {
     private val link = mutableStateOf<Uri?>(null)
 
@@ -142,7 +163,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                         WideNavigationRailItem(
                             selected = route == t.route,
                             onClick = { navController.goTab(t.route) },
-                            icon = { Icon(if (route == t.route) t.on else t.off, t.label) },
+                            icon = { TabIcon(t, route == t.route) },
                             label = { Text(t.label) },
                             railExpanded = false,
                         )
@@ -159,7 +180,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                                 ShortNavigationBarItem(
                                     selected = route == t.route,
                                     onClick = { navController.goTab(t.route) },
-                                    icon = { Icon(if (route == t.route) t.on else t.off, t.label) },
+                                    icon = { TabIcon(t, route == t.route) },
                                     label = { Text(t.label) },
                                 )
                             }

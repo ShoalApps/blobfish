@@ -563,7 +563,7 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
                     busy = true; error = null
                     scope.launch {
                         runCatching { Graph.atp.signIn(handle, password) }
-                            .onSuccess { Graph.syncModeration(); onDone() }
+                            .onSuccess { Graph.syncModeration(); Graph.syncProfile(); onDone() }
                             .onFailure { error = friendly(it) }
                         busy = false
                     }
