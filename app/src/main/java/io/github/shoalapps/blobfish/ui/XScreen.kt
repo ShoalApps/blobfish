@@ -98,8 +98,19 @@ fun XScreen() {
             web.removeCallbacks(tick)
             web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())", null)
             web.onPause()
-            (web.parent as? ViewGroup)?.removeView(web)
         }
     }
-    AndroidView(factory = { (web.parent as? ViewGroup)?.removeView(web); web }, modifier = Modifier.fillMaxSize().statusBarsPadding())
+    // The page sits in a holder of this screen's own. During a tab change the next X screen can
+    // take the page before this one is cleaned up, so this one only lets go of its own holder;
+    // taking the page back would leave it detached, blank and at zero size.
+    AndroidView(
+        factory = { ctx ->
+            android.widget.FrameLayout(ctx).apply {
+                (web.parent as? ViewGroup)?.removeView(web)
+                addView(web, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            }
+        },
+        onRelease = { holder -> if (web.parent === holder) holder.removeView(web) },
+        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+    )
 }

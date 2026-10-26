@@ -176,6 +176,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                 "notifications", "search", "you" -> navController.goTab(link.host!!)
                 // From Shoal's Accounts screen.
                 "signin" -> navController.navigate("signin")
+                "x" -> { Graph.store.updateSettings { it.copy(showX = true) }; navController.goTab("x") }
             }
             onLinkHandled()
             return@LaunchedEffect
