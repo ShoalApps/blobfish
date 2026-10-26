@@ -174,6 +174,8 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
             when (link.host) {
                 "compose" -> { replyTo = null; composing = true }
                 "notifications", "search", "you" -> navController.goTab(link.host!!)
+                // From Shoal's Accounts screen.
+                "signin" -> navController.navigate("signin")
             }
             onLinkHandled()
             return@LaunchedEffect
