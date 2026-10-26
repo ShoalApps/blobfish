@@ -101,7 +101,8 @@ data class Thread(val parents: List<Post>, val focus: ThreadNode)
 
 data class Notification(val reason: String, val author: Author, val subject: String?, val text: String?, val at: Instant?, val read: Boolean)
 
-data class Session(val did: String, val handle: String, val access: String, val refresh: String, val pds: String)
+/** Your sign-in. [oauth] sessions came from Bluesky's sign-in page and sign each request (DPoP). */
+data class Session(val did: String, val handle: String, val access: String, val refresh: String, val pds: String, val oauth: Boolean = false, val tokenUrl: String? = null)
 
 class AtpException(val status: Int, message: String) : Exception(message)
 
@@ -136,7 +137,10 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             params.forEach { (k, v) -> v?.split(MANY)?.forEach { addQueryParameter(k, it) } }
         }.build()
         val req = Request.Builder().url(url).apply {
-            if (s != null) header("Authorization", "Bearer ${s.access}")
+            if (s != null && s.oauth) {
+                header("Authorization", "DPoP ${s.access}")
+                header("DPoP", BskyOAuth.proof(method, url.toString(), BskyOAuth.nonceFor(url.toString()), s.access))
+            } else if (s != null) header("Authorization", "Bearer ${s.access}")
             // Labels are only included from labelers the request names: Bluesky's own, plus yours.
             header("atproto-accept-labelers", (listOf("${Moderation.BLUESKY_LABELER};redact") + store.moderation.value.labelers).joinToString(", "))
             if (method == "POST") post((body ?: JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
@@ -144,6 +148,17 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         http.newCall(req).execute().use { resp ->
             val text = resp.body?.string().orEmpty()
             val obj = runCatching { json.parseToJsonElement(text) as JsonObject }.getOrDefault(JsonObject(emptyMap()))
+            if (s != null && s.oauth) {
+                BskyOAuth.remember(url.toString(), resp)
+                val challenge = resp.header("WWW-Authenticate").orEmpty()
+                // The PDS wants a fresh nonce: try again with it.
+                if (resp.code == 401 && challenge.contains("use_dpop_nonce") && !retried) return@withContext call(method, nsid, params, body, auth, retried = true)
+                // The access token ran out: refresh it and try again.
+                if (resp.code == 401 && (challenge.contains("invalid_token") || obj.str("error") == "invalid_token") && !retried) {
+                    refreshSession()
+                    return@withContext call(method, nsid, params, body, auth, retried = true)
+                }
+            }
             if (resp.code == 400 && obj.str("error") == "ExpiredToken" && s != null && !retried) {
                 refreshSession()
                 return@withContext call(method, nsid, params, body, auth, retried = true)
@@ -154,6 +169,9 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
     }
 
     // ---- Sign-in ----
+
+    /** Completes a sign-in from Bluesky's page (see [BskyOAuth]). */
+    fun useOAuthSession(s: Session) = store.setSession(s)
 
     /** Signs in with a handle (or email) and an app password, finding the account's own server. */
     suspend fun signIn(identifier: String, password: String) {
@@ -166,6 +184,10 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     private suspend fun refreshSession() = withContext(Dispatchers.IO) {
         val s = session ?: return@withContext
+        if (s.oauth) {
+            runCatching { BskyOAuth.refresh(http, s) }.onSuccess { store.setSession(it) }.onFailure { store.setSession(null); throw AtpException(401, "Please sign in again") }
+            return@withContext
+        }
         val req = Request.Builder().url("${s.pds}/xrpc/com.atproto.server.refreshSession")
             .header("Authorization", "Bearer ${s.refresh}")
             .post(ByteArray(0).toRequestBody())

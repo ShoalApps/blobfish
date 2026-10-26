@@ -55,6 +55,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="bsky.app" android:pathPrefix="/profile/" />
             </intent-filter>
+            <!-- Bluesky's sign-in page sends you back here (AT Protocol OAuth). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="io.github.shoalapps" android:path="/oauth/blobfish" />
+            </intent-filter>
         </activity>
 
         <receiver

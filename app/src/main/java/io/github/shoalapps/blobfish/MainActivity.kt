@@ -148,6 +148,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     var composing by remember { mutableStateOf(false) }
     var replyTo by remember { mutableStateOf<Post?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val nav = remember {
         Nav(
             post = { uri -> navController.navigate("post/${Uri.encode(uri)}") },
@@ -160,6 +161,14 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
     }
     // bsky.app/profile/<handle> and bsky.app/profile/<handle>/post/<id> open inside the app.
     LaunchedEffect(link) {
+        // Back from Bluesky's sign-in page.
+        if (link?.scheme == "io.github.shoalapps") {
+            runCatching { io.github.shoalapps.blobfish.data.BskyOAuth.finish(context, Graph.http, link) }
+                .onSuccess { Graph.atp.useOAuthSession(it); Graph.syncModeration(); Graph.syncProfile(); io.github.shoalapps.blobfish.ui.toast(context, "Signed in as @${it.handle}") }
+                .onFailure { io.github.shoalapps.blobfish.ui.toast(context, io.github.shoalapps.blobfish.ui.friendly(it)) }
+            onLinkHandled()
+            return@LaunchedEffect
+        }
         // From the widget: blobfish://compose, notifications, search, you.
         if (link?.scheme == "blobfish") {
             when (link.host) {

@@ -64,6 +64,8 @@ android {
 }
 
 dependencies {
+    // Bluesky's sign-in page in a browser tab.
+    implementation("androidx.browser:browser:1.8.0")
     // Error reports, only with consent (MIT). See Telemetry.kt.
     implementation("io.sentry:sentry-android:8.59.0")
     // Home-screen widgets (Material You colours via Glance).

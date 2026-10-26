@@ -22,7 +22,7 @@ data class Settings(
 )
 
 @Serializable
-private data class SavedSession(val did: String, val handle: String, val access: String, val refresh: String, val pds: String)
+private data class SavedSession(val did: String, val handle: String, val access: String, val refresh: String, val pds: String, val oauth: Boolean = false, val tokenUrl: String? = null)
 
 /** Settings and your Bluesky session, kept privately on the phone. */
 class Store(context: Context) {
@@ -34,7 +34,7 @@ class Store(context: Context) {
 
     private val _session = MutableStateFlow(
         prefs.getString("session", null)?.let { runCatching { json.decodeFromString<SavedSession>(it) }.getOrNull() }
-            ?.let { Session(it.did, it.handle, it.access, it.refresh, it.pds) },
+            ?.let { Session(it.did, it.handle, it.access, it.refresh, it.pds, it.oauth, it.tokenUrl) },
     )
     val session: StateFlow<Session?> = _session
 
@@ -46,7 +46,7 @@ class Store(context: Context) {
     fun setSession(s: Session?) {
         _session.value = s
         if (s == null) { prefs.edit().remove("session").apply(); setModeration(Moderation.Prefs()) }
-        else prefs.edit().putString("session", json.encodeToString(SavedSession.serializer(), SavedSession(s.did, s.handle, s.access, s.refresh, s.pds))).apply()
+        else prefs.edit().putString("session", json.encodeToString(SavedSession.serializer(), SavedSession(s.did, s.handle, s.access, s.refresh, s.pds, s.oauth, s.tokenUrl))).apply()
     }
 
     /** Moderation preferences: a copy of your account's (or the defaults when signed out). */

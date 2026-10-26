@@ -69,6 +69,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -622,7 +624,9 @@ fun YouScreen(nav: Nav, onSignIn: () -> Unit, onSettings: () -> Unit) {
             verticalArrangement = Arrangement.Center,
         ) {
             val shape = remember { PolygonShape(MaterialShapes.Clover8Leaf) }
-            Box(Modifier.size(112.dp).clip(shape).background(MaterialTheme.colorScheme.primaryContainer))
+            Box(Modifier.size(112.dp).clip(shape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                Icon(androidx.compose.ui.res.painterResource(io.github.shoalapps.blobfish.R.drawable.ic_widget_badge), null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
             Text("Join the conversation", style = MaterialTheme.typography.headlineSmallEmphasized, modifier = Modifier.padding(top = 20.dp))
             Text(
                 "Sign in with your Bluesky account to post, reply, like and see your timeline.",
@@ -646,41 +650,79 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var appPassword by remember { mutableStateOf(false) }
+    val session by Graph.store.session.collectAsState()
+    // Back from Bluesky's page and signed in: done.
+    LaunchedEffect(session?.did) { if (session != null) onDone() }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        topBar = { TopAppBar(title = { Text("Sign in to Bluesky") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } }) },
+        topBar = { TopAppBar(title = { Text("Sign in") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } }) },
     ) { pad ->
-        Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).padding(24.dp).imePadding()) {
+        Column(
+            Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).verticalScroll(rememberScrollState()).padding(24.dp).imePadding()
+                .wrapContentWidth().widthIn(max = 480.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.size(88.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                Icon(androidx.compose.ui.res.painterResource(io.github.shoalapps.blobfish.R.drawable.ic_widget_badge), null, Modifier.size(52.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+            Text("Sign in with Bluesky", style = MaterialTheme.typography.headlineSmallEmphasized, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
             Text(
-                "Use an app password, not your main password. Create one in Bluesky under Settings → Privacy and security → App passwords.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = { openLink(context, "https://bsky.app/settings/app-passwords") }) { Text("Open app passwords") }
-            OutlinedTextField(
-                handle, { handle = it }, Modifier.fillMaxWidth().padding(top = 8.dp),
-                label = { Text("Handle or email") }, placeholder = { Text("you.bsky.social") }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                "You'll sign in on Bluesky's own page, with your usual password and two-factor. Blobfish never sees your password.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
             )
             OutlinedTextField(
-                password, { password = it }, Modifier.fillMaxWidth().padding(top = 12.dp),
-                label = { Text("App password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                handle, { handle = it }, Modifier.fillMaxWidth().padding(top = 20.dp),
+                label = { Text("Your handle (optional)") }, placeholder = { Text("you.bsky.social") }, singleLine = true,
+                supportingText = { Text("Only needed if your account isn't on bsky.social") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
             )
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp)) }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
             Button(
-                enabled = !busy && handle.isNotBlank() && password.isNotBlank(),
+                enabled = !busy,
                 onClick = {
                     busy = true; error = null
                     scope.launch {
-                        runCatching { Graph.atp.signIn(handle, password) }
-                            .onSuccess { Graph.syncModeration(); Graph.syncProfile(); onDone() }
+                        runCatching { io.github.shoalapps.blobfish.data.BskyOAuth.start(context, Graph.http, handle) }
+                            .onSuccess { url ->
+                                // Bluesky's page in a browser tab; it sends you back to the app when you're done.
+                                runCatching { androidx.browser.customtabs.CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, android.net.Uri.parse(url)) }
+                                    .onFailure { openLink(context, url) }
+                            }
                             .onFailure { error = friendly(it) }
                         busy = false
                     }
                 },
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp).height(56.dp),
-            ) { if (busy) androidx.compose.material3.LoadingIndicator(Modifier.size(28.dp)) else Text("Sign in") }
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(56.dp),
+            ) { if (busy) androidx.compose.material3.LoadingIndicator(Modifier.size(28.dp)) else Text("Continue to Bluesky") }
+            TextButton(onClick = { openLink(context, "https://bsky.app/") }) { Text("New to Bluesky? Create an account") }
+            androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 16.dp))
+            TextButton(onClick = { appPassword = !appPassword }) { Text(if (appPassword) "Hide app password sign-in" else "Use an app password instead") }
+            if (appPassword) {
+                Text(
+                    "For servers without the sign-in page. Create one in Bluesky under Settings → Privacy and security → App passwords.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    password, { password = it }, Modifier.fillMaxWidth().padding(top = 8.dp),
+                    label = { Text("App password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                )
+                androidx.compose.material3.OutlinedButton(
+                    enabled = !busy && handle.isNotBlank() && password.isNotBlank(),
+                    onClick = {
+                        busy = true; error = null
+                        scope.launch {
+                            runCatching { Graph.atp.signIn(handle, password) }
+                                .onSuccess { Graph.syncModeration(); Graph.syncProfile(); onDone() }
+                                .onFailure { error = friendly(it) }
+                            busy = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                ) { Text("Sign in with app password") }
+            }
         }
     }
 }
@@ -836,7 +878,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
             group("Account") {
                 val sess = session
                 if (sess != null) {
-                    row { sh -> Link("Signed in as @${sess.handle}", "Sign out of this account", sh) { store.setSession(null) } }
+                    row { sh -> Link("Signed in as @${sess.handle}", "Sign out of this account", sh) { store.setSession(null); io.github.shoalapps.blobfish.data.BskyOAuth.forgetKey() } }
                 } else {
                     row { sh -> Link("Sign in to Bluesky", "Post, reply, like and see your timeline", sh, onSignIn) }
                 }
