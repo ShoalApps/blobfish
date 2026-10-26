@@ -31,6 +31,7 @@ jobs:
       - name: Build release APK and run unit tests
         env:
           SHOAL_KEYSTORE_PASSWORD: ${{ secrets.SHOAL_KEYSTORE_PASSWORD }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SHOAL_KEY_ALIAS: ${{ secrets.SHOAL_KEY_ALIAS }}
         run: ./gradlew assembleRelease testDebugUnitTest --stacktrace
 

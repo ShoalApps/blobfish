@@ -27,6 +27,10 @@ Free software under the **GNU General Public License v3.0 or later**. See [LICEN
 
 Blobfish is not affiliated with, endorsed by or sponsored by Bluesky Social PBC.
 
+## Privacy and legal
+
+No ads, no tracking, nothing sent to us unless you agree to anonymous error reports. See the [privacy policy](https://shoalapps.github.io/privacy.html) and [legal notices](https://shoalapps.github.io/legal.html).
+
 ## Support
 
 Shoal is free, open source and has no ads. If you'd like to help it keep going, you can [support Shoal on Liberapay](https://liberapay.com/ShoalApps).

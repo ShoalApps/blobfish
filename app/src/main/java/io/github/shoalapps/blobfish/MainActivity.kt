@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Telemetry.askOnce(this)
         DataMover.offerUninstall(this)
         enableEdgeToEdge()
         link.value = intent?.data
@@ -159,6 +160,15 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
     }
     // bsky.app/profile/<handle> and bsky.app/profile/<handle>/post/<id> open inside the app.
     LaunchedEffect(link) {
+        // From the widget: blobfish://compose, notifications, search, you.
+        if (link?.scheme == "blobfish") {
+            when (link.host) {
+                "compose" -> { replyTo = null; composing = true }
+                "notifications", "search", "you" -> navController.goTab(link.host!!)
+            }
+            onLinkHandled()
+            return@LaunchedEffect
+        }
         val segs = link?.pathSegments ?: return@LaunchedEffect
         if (segs.size >= 4 && segs[2] == "post") nav.post("at://${segs[1]}/app.bsky.feed.post/${segs[3]}")
         else if (segs.size >= 2) nav.profile(segs[1])

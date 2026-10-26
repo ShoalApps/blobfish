@@ -880,6 +880,9 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 row { sh -> Link("Check for updates now", "Version $version · opens Shoal", sh) { io.github.shoalapps.blobfish.ShoalManager.checkForUpdates(context) } }
             }
             group("About") {
+                if (io.github.shoalapps.blobfish.Telemetry.available) row { sh -> Toggle("Send error reports", "Anonymous crash and error reports help fix bugs. Never your accounts or history.", io.github.shoalapps.blobfish.Telemetry.enabled, sh) { v -> io.github.shoalapps.blobfish.Telemetry.setEnabled(context, v) } }
+                row { sh -> Link("Privacy policy", "What Blobfish sends, and to whom", sh) { openLink(context, "https://shoalapps.github.io/privacy.html") } }
+                row { sh -> Link("Legal", "Licences, trademarks and notices", sh) { openLink(context, "https://shoalapps.github.io/legal.html") } }
                 row { sh -> Link("Support Shoal", "Shoal is free and has no ads; donations on Liberapay keep it going", sh) { openLink(context, "https://liberapay.com/ShoalApps") } }
                 row { sh -> Link("Source code", "github.com/ShoalApps/blobfish", sh) { openLink(context, "https://github.com/ShoalApps/blobfish") } }
                 row { sh -> Link("Shoal", "shoalapps.github.io: all the apps and their credits", sh) { openLink(context, "https://shoalapps.github.io") } }
