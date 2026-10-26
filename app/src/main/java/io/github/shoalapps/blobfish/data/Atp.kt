@@ -454,7 +454,10 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
     })
 
     /** Posts [text], turning links, @handles and #tags into facets. [replyTo] makes it a reply. */
-    suspend fun post(text: String, replyTo: Post? = null): String {
+    /** A picture to attach: the uploaded blob, its alt text and size. */
+    data class Attachment(val blob: JsonObject, val alt: String, val width: Int, val height: Int)
+
+    suspend fun post(text: String, replyTo: Post? = null, images: List<Attachment> = emptyList()): String {
         val facets = RichText.detect(text).mapNotNull { f ->
             val feature = when (f.kind) {
                 RichText.Facet.Kind.LINK -> buildJsonObject { put("\$type", "app.bsky.richtext.facet#link"); put("uri", f.value) }
@@ -478,6 +481,18 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             put("text", text)
             put("createdAt", now())
             if (facets.isNotEmpty()) put("facets", JsonArray(facets))
+            if (images.isNotEmpty()) putJsonObject("embed") {
+                put("\$type", "app.bsky.embed.images")
+                putJsonArray("images") {
+                    images.forEach { a ->
+                        add(buildJsonObject {
+                            put("image", a.blob)
+                            put("alt", a.alt)
+                            putJsonObject("aspectRatio") { put("width", a.width); put("height", a.height) }
+                        })
+                    }
+                }
+            }
             if (replyTo != null) {
                 val root = replyTo.replyRoot ?: Ref(replyTo.uri, replyTo.cid)
                 putJsonObject("reply") {

@@ -164,7 +164,10 @@ private fun CameraBadge(modifier: Modifier) {
 }
 
 /** Shrinks a picked image to Bluesky's limits (1 MB) as JPEG and uploads it. */
-private suspend fun upload(context: android.content.Context, uri: Uri, maxSide: Int) = withContext(Dispatchers.IO) {
+private suspend fun upload(context: android.content.Context, uri: Uri, maxSide: Int) = uploadImage(context, uri, maxSide).first
+
+/** Like [upload], also giving the uploaded picture's width and height. */
+internal suspend fun uploadImage(context: android.content.Context, uri: Uri, maxSide: Int): Triple<kotlinx.serialization.json.JsonObject, Int, Int> = withContext(Dispatchers.IO) {
     // Works on every Android version: read the size, decode at a fraction, then scale to fit.
     val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)!!.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
@@ -183,5 +186,5 @@ private suspend fun upload(context: android.content.Context, uri: Uri, maxSide: 
         bytes = out.toByteArray()
         quality -= 10
     } while (bytes.size > 950_000 && quality > 30)
-    Graph.atp.uploadBlob(bytes, "image/jpeg")
+    Triple(Graph.atp.uploadBlob(bytes, "image/jpeg"), bitmap.width, bitmap.height)
 }

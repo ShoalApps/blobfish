@@ -36,6 +36,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Repeat
@@ -693,6 +694,12 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    // Up to four pictures, each with alt text, like Bluesky.
+    val pictures = remember { androidx.compose.runtime.mutableStateListOf<Pair<android.net.Uri, String>>() }
+    var altFor by remember { mutableStateOf<Int?>(null) }
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
+        uris.take(4 - pictures.size).forEach { pictures += it to "" }
+    }
     val limit = 300
     val count = text.codePointCount(0, text.length)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -702,11 +709,17 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
                 Text(if (replyTo != null) "Reply to ${replyTo.author.name}" else "New post", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Text("${limit - count}", color = if (count > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
-                    enabled = !busy && text.isNotBlank() && count <= limit,
+                    enabled = !busy && (text.isNotBlank() || pictures.isNotEmpty()) && count <= limit,
                     onClick = {
                         busy = true
                         scope.launch {
-                            runCatching { Graph.atp.post(text.trim(), replyTo) }
+                            runCatching {
+                                val images = pictures.map { (uri, alt) ->
+                                    val (blob, w, h) = uploadImage(context, uri, 2000)
+                                    io.github.shoalapps.blobfish.data.Atp.Attachment(blob, alt, w, h)
+                                }
+                                Graph.atp.post(text.trim(), replyTo, images)
+                            }
                                 .onSuccess { toast(context, "Posted"); onDismiss() }
                                 .onFailure { toast(context, friendly(it)) }
                             busy = false
@@ -720,6 +733,38 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
                 placeholder = { Text("What's up? Use ``` for code, **bold**, *italic*") },
                 minLines = 4,
             )
+            if (pictures.isNotEmpty()) {
+                Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pictures.forEachIndexed { i, (uri, alt) ->
+                        Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp))) {
+                            AsyncImage(uri, alt, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            IconButton(onClick = { pictures.removeAt(i) }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp).padding(2.dp).clip(CircleShape).background(Color.Black.copy(alpha = .6f))) {
+                                Icon(Icons.Rounded.Close, "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                            Text(
+                                if (alt.isBlank()) "+ALT" else "ALT ✓", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = .6f)).clickable { altFor = i }.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(enabled = pictures.size < 4, onClick = { pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                    Icon(Icons.Rounded.Image, "Add pictures", tint = MaterialTheme.colorScheme.primary)
+                }
+                if (pictures.isNotEmpty()) Text("${pictures.size}/4", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            altFor?.let { i ->
+                var draft by remember(i) { mutableStateOf(pictures.getOrNull(i)?.second.orEmpty()) }
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { altFor = null },
+                    title = { Text("Alt text") },
+                    text = { OutlinedTextField(draft, { if (it.length <= 2000) draft = it }, placeholder = { Text("Describe the picture for people who can't see it") }, minLines = 3, modifier = Modifier.fillMaxWidth()) },
+                    confirmButton = { androidx.compose.material3.TextButton(onClick = { pictures.getOrNull(i)?.let { pictures[i] = it.first to draft.trim() }; altFor = null }) { Text("Save") } },
+                    dismissButton = { androidx.compose.material3.TextButton(onClick = { altFor = null }) { Text("Cancel") } },
+                )
+            }
             if (text.isNotBlank()) {
                 Text("Preview", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
                 RichTextView(text, emptyList(), nav)
