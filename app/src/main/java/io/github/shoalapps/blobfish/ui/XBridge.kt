@@ -135,13 +135,13 @@ object XBridge {
     suspend fun follow(handle: String, on: Boolean): Boolean = lock.withLock {
         withContext(Dispatchers.Main) {
             val v = view()
-            v.loadUrl("https://x.com/$handle")
+            if (!loadAndAwait(v, "https://x.com/$handle", "/$handle")) return@withContext false
             pressOnPage(v, if (on) listOf("-follow") else listOf("-unfollow", "confirmationSheetConfirm"))
         }
     }
 
     /** Presses buttons whose test id ends with each of [suffixes], in turn, waiting for each to appear. */
-    private suspend fun pressOnPage(v: WebView, suffixes: List<String>): Boolean {
+    private suspend fun pressOnPage(v: WebView, suffixes: List<String>, scopeJs: String = "document", exact: Boolean = false, expect: String? = null): Boolean {
         val d = CompletableDeferred<Boolean>()
         val w = CompletableDeferred<JsonObject>()
         synchronized(this) { waiting["__press"] = w }
@@ -149,10 +149,21 @@ object XBridge {
         v.evaluateJavascript("""
             (function () { const ids = [$ids]; let tries = 0;
               const step = (i) => {
-                if (i >= ids.length) return window.BlobfishX.onData('__press', JSON.stringify({ok: true}));
-                const b = document.querySelector('[data-testid$="' + ids[i] + '"]');
+                // All pressed: done, or (with an expected button) done once that button has appeared.
+                if (i >= ids.length) {
+                  const want = ${org.json.JSONObject.quote(expect ?: "")};
+                  if (!want) return window.BlobfishX.onData('__press', JSON.stringify({ok: true}));
+                  let checks = 0;
+                  const check = () => { const r = ($scopeJs); if (r && r.querySelector('[data-testid="' + want + '"]')) return window.BlobfishX.onData('__press', JSON.stringify({ok: true}));
+                    if (++checks < 20) setTimeout(check, 250); else window.BlobfishX.onData('__press', JSON.stringify({ok: false})); };
+                  return check();
+                }
+                // The first button is looked for within the scope (e.g. one post); later ones (confirmations) anywhere.
+                const root = i === 0 ? ($scopeJs) : document;
+                const b = root && root.querySelector('[data-testid${if (exact) "" else "$"}="' + ids[i] + '"]');
                 if (!b) { if (++tries < 40) return setTimeout(() => step(i), 250); return window.BlobfishX.onData('__press', JSON.stringify({ok: false})); }
-                b.click(); tries = 0; setTimeout(() => step(i + 1), 500);
+                // A moment between presses: X's confirmation sheet ignores taps while it slides in.
+                b.click(); tries = 0; setTimeout(() => step(i + 1), 1200);
               };
               setTimeout(() => step(0), 800);
             })();
@@ -178,34 +189,40 @@ object XBridge {
 
     /**
      * Presses a post's buttons on the website, as you would: like/unlike, repost/undo. [testIds]
-     * are pressed in turn (a repost needs its confirm). Returns whether the first button was found.
+     * are pressed in turn (a repost needs its confirm). Returns whether they were all found.
      */
-    suspend fun press(id: String, vararg testIds: String): Boolean = lock.withLock {
+    suspend fun press(id: String, vararg testIds: String, expect: String? = null): Boolean = lock.withLock {
         withContext(Dispatchers.Main) {
             val v = view()
-            v.loadUrl("https://x.com/i/status/$id")
-            val d = CompletableDeferred<Boolean>()
-            val ids = testIds.joinToString(",") { org.json.JSONObject.quote(it) }
-            // Wait for the post to appear, press the buttons a moment apart, report back.
-            v.evaluateJavascript("""
-                (function () {
-                  const ids = [$ids]; let tries = 0;
-                  const article = () => [...document.querySelectorAll('article')].find(a => a.querySelector('a[href*="/status/$id"]')) || document.querySelector('article');
-                  const step = (i) => {
-                    if (i >= ids.length) return;
-                    const root = i === 0 ? article() : document;
-                    const b = root && root.querySelector('[data-testid="' + ids[i] + '"]');
-                    if (!b) { if (++tries < 40) return setTimeout(() => step(i), 250); window.BlobfishX && window.BlobfishX.onData('__press', JSON.stringify({ok: i > 0})); return; }
-                    b.click();
-                    if (i === ids.length - 1) window.BlobfishX && window.BlobfishX.onData('__press', JSON.stringify({ok: true}));
-                    else setTimeout(() => step(i + 1), 400);
-                  };
-                  step(0);
-                })();
-            """, null)
-            synchronized(XBridge) { waiting["__press"] = CompletableDeferred<JsonObject>().also { w -> kotlinx.coroutines.GlobalScope.launch { d.complete((withTimeoutOrNull(15_000) { w.await() }?.get("ok") as? kotlinx.serialization.json.JsonPrimitive)?.content == "true") } } }
-            d.await()
+            if (!loadAndAwait(v, "https://x.com/i/status/$id", "/status/$id")) return@withContext false
+            // The post itself, not the ones above it or the replies: its timestamp links to it.
+            val scope = "[...document.querySelectorAll('article')].find(a => a.querySelector('a[href*=\"/status/$id\"] time')) || document.querySelector('article')"
+            pressOnPage(v, testIds.toList(), scope, exact = true, expect = expect)
         }
+    }
+
+    /** Likes or unlikes a post; true once the website shows it done. */
+    suspend fun like(id: String, on: Boolean) = press(id, if (on) "like" else "unlike", expect = if (on) "unlike" else "like")
+
+    /** Reposts a post or undoes it (each with its confirmation); true once the website shows it done. */
+    suspend fun repost(id: String, on: Boolean) =
+        press(id, if (on) "retweet" else "unretweet", if (on) "retweetConfirm" else "unretweetConfirm", expect = if (on) "unretweet" else "retweet")
+
+    /** Loads [url] and waits (up to 15 s) for that new page, with a post or profile on it, to be showing. */
+    private suspend fun loadAndAwait(v: WebView, url: String, fragment: String): Boolean {
+        // Mark the page being left, so the old one (even at the same address) isn't mistaken for the new.
+        val marked = CompletableDeferred<Unit>()
+        v.evaluateJavascript("window.__blobfishOld = true") { marked.complete(Unit) }
+        marked.await()
+        v.loadUrl(url)
+        repeat(60) {
+            kotlinx.coroutines.delay(250)
+            val d = CompletableDeferred<String?>()
+            v.evaluateJavascript("(window.__blobfishOld ? 'old' : 'new') + '|' + location.pathname + '|' + document.readyState + '|' + !!document.querySelector('article, [data-testid=primaryColumn] [data-testid$=follow]')") { d.complete(it?.trim('"')) }
+            val r = d.await().orEmpty().split('|')
+            if (r.size == 4 && r[0] == "new" && r[1].contains(fragment, ignoreCase = true) && r[2] != "loading" && r[3] == "true") return true
+        }
+        return false
     }
 
     /**

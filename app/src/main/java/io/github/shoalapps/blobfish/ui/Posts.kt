@@ -551,7 +551,7 @@ private fun Actions(post: Post, nav: Nav) {
             scope.launch {
                 runCatching {
                     // Twitter: press its own repost (or undo) button and confirm.
-                    if (twitter) { if (!XBridge.press(xId, if (was == null) "retweet" else "unretweet", if (was == null) "retweetConfirm" else "unretweetConfirm")) error("Couldn't reach ${XBrand.name}") ; if (was == null) repostUri = "x-repost" }
+                    if (twitter) { if (!XBridge.repost(xId, was == null)) error("Couldn't repost on ${XBrand.name}; try again"); if (was == null) repostUri = "x-repost" }
                     else if (was == null) repostUri = Graph.atp.repost(post) else Graph.atp.undo(was)
                 }.onFailure { toast(context, it.message ?: "Couldn't repost"); if (was == null) { reposts--; repostUri = null } else { reposts++; repostUri = was } }
             }
@@ -562,7 +562,7 @@ private fun Actions(post: Post, nav: Nav) {
             if (was == null) { likes++; likeUri = "pending" } else { likes--; likeUri = null }
             scope.launch {
                 runCatching {
-                    if (twitter) { if (!XBridge.press(xId, if (was == null) "like" else "unlike")) error("Couldn't reach ${XBrand.name}"); if (was == null) likeUri = "x-like" }
+                    if (twitter) { if (!XBridge.like(xId, was == null)) error("Couldn't like on ${XBrand.name}; try again"); if (was == null) likeUri = "x-like" }
                     else if (was == null) likeUri = Graph.atp.like(post) else Graph.atp.undo(was)
                 }.onFailure { toast(context, it.message ?: "Couldn't like"); if (was == null) { likes--; likeUri = null } else { likes++; likeUri = was } }
             }
