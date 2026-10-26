@@ -82,6 +82,8 @@ data class FeedItem(
     val replyTo: Author?,
     /** The post this replies to, shown above it in feeds like Bluesky does. */
     val parent: Post? = null,
+    /** Pinned to the top of its author's profile. */
+    val pinned: Boolean = false,
 )
 
 /** A Profile Link: a highlighted link under the bio (Bluesky 1.136, October 2026). */
@@ -574,7 +576,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             val replyTo = parentObj?.get("author").obj?.let(::parseAuthor)
             // Reposted replies show without their parent, as in Bluesky.
             val parent = if (by == null) parentObj?.let(::parsePost) else null
-            FeedItem(post, by, replyTo, parent)
+            FeedItem(post, by, replyTo, parent, pinned = reason.str("\$type")?.endsWith("reasonPin") == true)
         }
         return Page(items, o.str("cursor"))
     }

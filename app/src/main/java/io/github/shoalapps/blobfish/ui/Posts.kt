@@ -52,6 +52,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Verified
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.ui.semantics.contentDescription
@@ -223,6 +224,8 @@ fun PostCard(
     repostedBy: Author? = null,
     replyTo: Author? = null,
     big: Boolean = false,
+    /** Pinned to the top of a profile: says so above the post, with a pin. */
+    pinned: Boolean = false,
     /** In threads a hidden post leaves a note, so the conversation still makes sense. */
     noteWhenHidden: Boolean = false,
     /** Bluesky's thread line, joining this post's avatar to the post above and/or below. */
@@ -259,6 +262,12 @@ fun PostCard(
             }
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (lineBelow) 4.dp else 12.dp),
     ) {
+        if (pinned) {
+            Row(Modifier.padding(start = 46.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.PushPin, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Pinned", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
+            }
+        }
         repostedBy?.let {
             Row(Modifier.padding(start = 46.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Repeat, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -524,7 +533,9 @@ private fun LinkCardView(card: io.github.shoalapps.blobfish.data.LinkCard, modif
 private fun Actions(post: Post, nav: Nav) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val signedIn = Graph.store.session.collectAsState().value != null
+    val twitter = io.github.shoalapps.blobfish.data.TwitterParse.isTwitter(post.uri)
+    val xId = post.uri.removePrefix(io.github.shoalapps.blobfish.data.TwitterParse.PREFIX)
+    val signedIn = if (twitter) XView.signedIn else Graph.store.session.collectAsState().value != null
     var likeUri by remember(post.uri) { mutableStateOf(post.myLike) }
     var likes by remember(post.uri) { mutableIntStateOf(post.likeCount) }
     var repostUri by remember(post.uri) { mutableStateOf(post.myRepost) }
@@ -538,8 +549,11 @@ private fun Actions(post: Post, nav: Nav) {
             val was = repostUri
             if (was == null) { reposts++; repostUri = "pending" } else { reposts--; repostUri = null }
             scope.launch {
-                runCatching { if (was == null) repostUri = Graph.atp.repost(post) else Graph.atp.undo(was) }
-                    .onFailure { toast(context, it.message ?: "Couldn't repost") }
+                runCatching {
+                    // Twitter: press its own repost (or undo) button and confirm.
+                    if (twitter) { if (!XBridge.press(xId, if (was == null) "retweet" else "unretweet", if (was == null) "retweetConfirm" else "unretweetConfirm")) error("Couldn't reach ${XBrand.name}") ; if (was == null) repostUri = "x-repost" }
+                    else if (was == null) repostUri = Graph.atp.repost(post) else Graph.atp.undo(was)
+                }.onFailure { toast(context, it.message ?: "Couldn't repost"); if (was == null) { reposts--; repostUri = null } else { reposts++; repostUri = was } }
             }
         }
         Action(if (likeUri != null) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder, likes, likeUri != null, "Like", activeColor = Color(0xFFE5486B)) {
@@ -547,12 +561,15 @@ private fun Actions(post: Post, nav: Nav) {
             val was = likeUri
             if (was == null) { likes++; likeUri = "pending" } else { likes--; likeUri = null }
             scope.launch {
-                runCatching { if (was == null) likeUri = Graph.atp.like(post) else Graph.atp.undo(was) }
-                    .onFailure { toast(context, it.message ?: "Couldn't like") }
+                runCatching {
+                    if (twitter) { if (!XBridge.press(xId, if (was == null) "like" else "unlike")) error("Couldn't reach ${XBrand.name}"); if (was == null) likeUri = "x-like" }
+                    else if (was == null) likeUri = Graph.atp.like(post) else Graph.atp.undo(was)
+                }.onFailure { toast(context, it.message ?: "Couldn't like"); if (was == null) { likes--; likeUri = null } else { likes++; likeUri = was } }
             }
         }
         IconButton(onClick = {
-            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, webUrl(post)), "Share"))
+            val link = if (twitter) "https://x.com/${post.author.handle}/status/$xId" else webUrl(post)
+            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link), "Share"))
         }) { Icon(Icons.Rounded.Share, "Share", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         PostMenu(post)
     }

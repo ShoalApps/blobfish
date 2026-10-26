@@ -106,6 +106,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import io.github.shoalapps.blobfish.Graph
+import io.github.shoalapps.blobfish.data.TwitterParse
 import io.github.shoalapps.blobfish.data.Moderation
 import io.github.shoalapps.blobfish.data.AtpException
 import io.github.shoalapps.blobfish.data.Author
@@ -207,7 +208,7 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
             PostCard(item.post, nav, lineAbove = true)
         }
     } else {
-        PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo)
+        PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo, pinned = item.pinned)
     }
 }
 
@@ -400,7 +401,11 @@ class ThreadVm(private val uri: String) : ViewModel() {
     init { load() }
     fun load() {
         error = null
-        viewModelScope.launch { runCatching { Graph.atp.thread(uri) }.onSuccess { thread = it }.onFailure { error = friendly(it) } }
+        viewModelScope.launch {
+            // Twitter posts come from its website (XBridge); Bluesky's from Bluesky.
+            runCatching { if (TwitterParse.isTwitter(uri)) XBridge.thread(uri.removePrefix(TwitterParse.PREFIX)) else Graph.atp.thread(uri) }
+                .onSuccess { thread = it }.onFailure { error = friendly(it) }
+        }
     }
 }
 
@@ -447,13 +452,24 @@ private fun LazyListScope.replies(n: ThreadNode, nav: Nav, depth: Int, lineAbove
 class ProfileVm(private val actor: String) : ViewModel() {
     var profile by mutableStateOf<Profile?>(null); private set
     var error by mutableStateOf<String?>(null); private set
-    val posts = PagedVm { c -> Graph.atp.authorFeed(actor, c) }
-    val replies by lazy { PagedVm { c -> Graph.atp.authorFeed(actor, c, "posts_with_replies") } }
-    val media by lazy { PagedVm { c -> Graph.atp.authorFeed(actor, c, "posts_with_media") } }
+    /** A Twitter profile ("x:<id>" or "x:@handle"): read from its website, by handle. */
+    private val twitter = TwitterParse.isTwitter(actor)
+    private val xHandle get() = TwitterParse.handleOf(actor) ?: actor.removePrefix(TwitterParse.PREFIX).removePrefix("@")
+    /** Twitter's posts load with its profile page, so they wait for it. */
+    private val profileLoaded = kotlinx.coroutines.CompletableDeferred<Unit>()
+    val posts = PagedVm { c -> if (twitter) { profileLoaded.await(); XBridge.posts(xHandle, c) } else Graph.atp.authorFeed(actor, c) }
+    val replies by lazy { PagedVm { c -> if (twitter) XBridge.posts(xHandle, c, "replies") else Graph.atp.authorFeed(actor, c, "posts_with_replies") } }
+    val media by lazy { PagedVm { c -> if (twitter) XBridge.posts(xHandle, c, "media") else Graph.atp.authorFeed(actor, c, "posts_with_media") } }
     var tab by mutableStateOf(0)
     val current get() = when (tab) { 1 -> replies; 2 -> media; else -> posts }
     init { load() }
-    fun load() { viewModelScope.launch { runCatching { Graph.atp.profile(actor) }.onSuccess { profile = it }.onFailure { error = friendly(it) } } }
+    fun load() {
+        viewModelScope.launch {
+            runCatching { if (twitter) XBridge.profile(xHandle) else Graph.atp.profile(actor) }
+                .onSuccess { profile = it }.onFailure { error = friendly(it) }
+            profileLoaded.complete(Unit)
+        }
+    }
 }
 
 /** A profile's top, laid out like Bluesky's: banner, avatar, buttons, name and badges, counts, bio, Profile Links. */
@@ -487,7 +503,8 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).height(40.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            if (isMe) androidx.compose.material3.OutlinedButton(onClick = nav.editProfile) { Text("Edit profile") }
+            // Profile editing is Bluesky's for now (Twitter profiles are edited on Twitter).
+            if (isMe && !TwitterParse.isTwitter(p.author.did)) androidx.compose.material3.OutlinedButton(onClick = nav.editProfile) { Text("Edit profile") }
             if (signedIn && !isMe) {
                 if (followed == null) Button(onClick = onFollow) { Text(if (p.followsYou) "Follow back" else "Follow") }
                 else androidx.compose.material3.FilledTonalButton(onClick = onUnfollow) { Text("Following") }
@@ -580,15 +597,24 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
                     if (vm.error != null) Message(vm.error!!, "Try again") { vm.load() } else CenterLoading()
                     return@item
                 }
-                ProfileHeader(p, nav, followed, isMe = session?.did == p.author.did, signedIn = session != null,
+                val twitter = TwitterParse.isTwitter(p.author.did)
+                ProfileHeader(p, nav, followed,
+                    isMe = if (twitter) XBridge.me.equals(p.author.handle, ignoreCase = true) else session?.did == p.author.did,
+                    signedIn = if (twitter) XView.signedIn else session != null,
                     onFollow = {
                         followed = "pending"
-                        scope.launch { runCatching { followed = Graph.atp.follow(p.author.did) }.onFailure { followed = null; toast(context, friendly(it)) } }
+                        scope.launch {
+                            runCatching { followed = if (twitter) { if (!XBridge.follow(p.author.handle, true)) error("Couldn't reach ${XBrand.name}"); "x-follow" } else Graph.atp.follow(p.author.did) }
+                                .onFailure { followed = null; toast(context, friendly(it)) }
+                        }
                     },
                     onUnfollow = {
                         val was = followed!!
                         followed = null
-                        scope.launch { runCatching { Graph.atp.undo(was) }.onFailure { followed = was; toast(context, friendly(it)) } }
+                        scope.launch {
+                            runCatching { if (twitter) { if (!XBridge.follow(p.author.handle, false)) error("Couldn't reach ${XBrand.name}") } else Graph.atp.undo(was) }
+                                .onFailure { followed = was; toast(context, friendly(it)) }
+                        }
                     },
                 )
             }

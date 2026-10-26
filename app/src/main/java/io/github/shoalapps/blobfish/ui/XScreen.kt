@@ -59,13 +59,23 @@ object XView {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 if (uri.scheme == "https" && owns(uri.host.orEmpty())) return false
-                runCatching { view.context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                // Only a link you actually tapped, on the visible sign-in page, opens outside. The
+                // hidden website (XBridge) sometimes bounces to "open the app" or app-store links by
+                // itself; those are ignored.
+                if (request.hasGesture() && view.isShown && view.alpha > 0f && !signedIn) {
+                    runCatching { view.context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
                 return true
             }
 
             override fun onPageFinished(view: WebView, url: String?) { CookieManager.getInstance().flush() }
         }
         webChromeClient = WebChromeClient()
+        // Hands the website's own data to Blobfish (see XBridge).
+        addJavascriptInterface(XBridge.Receiver(), "BlobfishX")
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, XBridge.CAPTURE_SCRIPT, setOf("https://x.com"))
+        }
         // "Call it Twitter": the bird and the old name on X's own pages too.
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
             val twitter = io.github.shoalapps.blobfish.Graph.store.settings.value.twitterNames
@@ -151,5 +161,29 @@ fun XScreen() {
         },
         onRelease = { holder -> if (web.parent === holder) holder.removeView(web) },
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
+    )
+}
+
+/** The website for XBridge: attached and laid out, so it loads as it scrolls, but not shown. */
+@Composable
+fun XHidden(modifier: Modifier) {
+    val context = LocalContext.current
+    val web = remember { XView.get(context) }
+    DisposableEffect(Unit) { web.onResume(); onDispose { } }
+    AndroidView(
+        factory = { ctx ->
+            // Swallows any touch that reaches it, so the hidden website is never pressed by accident.
+            object : android.widget.FrameLayout(ctx) {
+                override fun onInterceptTouchEvent(ev: android.view.MotionEvent) = true
+                @android.annotation.SuppressLint("ClickableViewAccessibility")
+                override fun onTouchEvent(event: android.view.MotionEvent) = true
+            }.apply {
+                (web.parent as? ViewGroup)?.removeView(web)
+                addView(web, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            }
+        },
+        onRelease = { holder -> if (web.parent === holder) holder.removeView(web) },
+        modifier = modifier,
     )
 }

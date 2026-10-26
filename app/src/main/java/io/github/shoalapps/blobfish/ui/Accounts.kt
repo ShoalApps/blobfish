@@ -32,6 +32,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.rounded.SwitchAccount
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -160,24 +162,38 @@ private fun SwitchRow(title: String, body: String, checked: Boolean, onChange: (
 }
 
 /**
- * Blobfish showing your X account: x.com full screen, with its own navigation, and a small
- * switcher in the corner to go back to Bluesky.
+ * Blobfish on your Twitter account: Twitter in Blobfish's own layout (home, search, your profile,
+ * posts and profiles in the same screens as Bluesky's), read from its website kept hidden behind.
+ * Until you've signed in, the website's sign-in page shows instead.
  */
 @Composable
 fun XAccountScreen(onSwitch: () -> Unit) {
+    var signedIn by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(XView.signedIn) }
+    // Signing in happens on the website; check now and then until it's done.
+    androidx.compose.runtime.LaunchedEffect(signedIn) {
+        while (!signedIn) { kotlinx.coroutines.delay(1000); signedIn = XView.signedIn }
+    }
     Box(Modifier.fillMaxSize()) {
-        XScreen()
-        Surface(
-            onClick = onSwitch, shape = CircleShape, shadowElevation = 6.dp, color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 6.dp, end = 10.dp)
-                .semantics { contentDescription = "Switch account" },
-        ) {
-            Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                AccountAvatar(Graph.myAvatar, bluesky = true, size = 32.dp)
-            }
+        if (!signedIn) {
+            XScreen()
+            SwitchButton(onSwitch, Modifier.align(Alignment.TopEnd))
+            return@Box
         }
+        // The website, laid out (its lists load as they're scrolled) but invisible, behind everything.
+        XHidden(Modifier.fillMaxSize().androidx_alpha0())
+        TwitterRoot(onSwitch)
     }
 }
+
+@Composable
+private fun SwitchButton(onSwitch: () -> Unit, modifier: Modifier) {
+    Surface(
+        onClick = onSwitch, shape = CircleShape, shadowElevation = 6.dp, color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = modifier.statusBarsPadding().padding(top = 6.dp, end = 10.dp).semantics { contentDescription = "Switch account" },
+    ) { Box(Modifier.padding(8.dp)) { Icon(androidx.compose.material.icons.Icons.Rounded.SwitchAccount, null) } }
+}
+
+private fun Modifier.androidx_alpha0() = this.then(Modifier.graphicsLayer { alpha = 0f })
 
 /**
  * Choosing a server: Bluesky's, or your own address. Checked before it's saved.
