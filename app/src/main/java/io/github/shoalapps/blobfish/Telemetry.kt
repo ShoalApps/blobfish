@@ -44,7 +44,13 @@ object Telemetry {
             o.environment = if (BuildConfig.DEBUG) "debug" else "release"
             o.setTag("app", "blobfish")
             // Strip anything that could identify the person.
-            o.setBeforeSend { event, _ -> event.user = null; event.serverName = null; event }
+            // Strip anything that could identify the person, and give a blank address so Sentry
+            // can't guess a location from the connection.
+            o.setBeforeSend { event, _ ->
+                event.user = io.sentry.protocol.User().apply { ipAddress = "0.0.0.0" }
+                event.serverName = null
+                event
+            }
         }
     }
 
