@@ -880,6 +880,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 row { sh -> Link("Check for updates now", "Version $version · opens Shoal", sh) { io.github.shoalapps.blobfish.ShoalManager.checkForUpdates(context) } }
             }
             group("About") {
+                row { sh -> Link("Support Shoal", "Shoal is free and has no ads; donations on Liberapay keep it going", sh) { openLink(context, "https://liberapay.com/ShoalApps") } }
                 row { sh -> Link("Source code", "github.com/ShoalApps/blobfish", sh) { openLink(context, "https://github.com/ShoalApps/blobfish") } }
                 row { sh -> Link("Shoal", "shoalapps.github.io: all the apps and their credits", sh) { openLink(context, "https://shoalapps.github.io") } }
                 row { sh ->

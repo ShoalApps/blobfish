@@ -26,3 +26,7 @@ asks GitHub whether there's a newer version. Your session is stored only on your
 Free software under the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE).
 
 Blobfish is not affiliated with, endorsed by or sponsored by Bluesky Social PBC.
+
+## Support
+
+Shoal is free, open source and has no ads. If you'd like to help it keep going, you can [support Shoal on Liberapay](https://liberapay.com/ShoalApps).
