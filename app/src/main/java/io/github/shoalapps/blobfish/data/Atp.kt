@@ -37,6 +37,12 @@ data class Author(
     /** A trusted verifier itself, like Bluesky or a news organisation (the scalloped badge). */
     val verifier: Boolean = false,
     val pronouns: String? = null,
+    /** They follow you. */
+    val followedBy: Boolean = false,
+    /** Your follow record for them, for unfollowing. */
+    val followUri: String? = null,
+    /** Their bio, where the API includes it (follower and following lists, search). */
+    val description: String? = null,
 ) {
     val name get() = displayName?.takeIf { it.isNotBlank() } ?: handle
 }
@@ -555,6 +561,9 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             verified = o["verification"].obj.str("verifiedStatus") == "valid",
             verifier = o["verification"].obj.str("trustedVerifierStatus") == "valid",
             pronouns = o.str("pronouns")?.takeIf { it.isNotBlank() },
+            followedBy = viewer.str("followedBy") != null,
+            followUri = viewer.str("following"),
+            description = o.str("description")?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
 

@@ -5,6 +5,32 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.lifecycle.viewModelScope
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.rounded.SyncAlt
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,12 +82,45 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Someone's followers ("followers") or the people they follow ("follows"). */
+/** How a follower or following list is narrowed down. */
+private enum class PeopleFilter(val label: String) { ALL("Everyone"), MUTUALS("Mutuals"), FOLLOW_YOU("Follow you"), NOT_BACK("Don't follow you back") }
+
+/**
+ * Someone's followers ("followers") or the people they follow ("follows"), with a search box
+ * and filters at the top. Each person shows their bio and how you're connected: whether they
+ * follow you, whether you follow them, or both (mutuals).
+ */
 @Composable
 fun PeopleScreen(kind: String, actor: String, nav: Nav, onBack: () -> Unit) {
     val vm = viewModel(key = "$kind-$actor") {
         PagedVm<Author> { c -> if (kind == "followers") Graph.atp.followers(actor, c) else Graph.atp.follows(actor, c) }
     }
+    val signedIn = Graph.store.session.collectAsState().value != null
+    var query by rememberSaveable { mutableStateOf("") }
+    var filter by rememberSaveable { mutableStateOf(PeopleFilter.ALL) }
+    // Follows changed here, so rows update straight away (did -> follow record, or null).
+    val changed = remember { mutableStateMapOf<String, String?>() }
+    val following = { a: Author -> if (a.did in changed) changed[a.did] != null else a.followUri != null }
+    val narrowing = query.isNotBlank() || filter != PeopleFilter.ALL
+    // Searching and filtering look through the whole list, so fetch the rest while either is on.
+    LaunchedEffect(narrowing, vm.hasMore, vm.loadingMore, vm.loading) {
+        if (narrowing && vm.hasMore && !vm.loadingMore && !vm.loading && vm.items.size < 10_000) vm.loadMore()
+    }
+    val q = query.trim().removePrefix("@").lowercase()
+    val shown = remember(vm.items, q, filter, changed.toMap()) {
+        vm.items.filter { a ->
+            (q.isEmpty() || a.handle.lowercase().contains(q) || a.displayName.orEmpty().lowercase().contains(q) || a.description.orEmpty().lowercase().contains(q)) &&
+                when (filter) {
+                    PeopleFilter.ALL -> true
+                    PeopleFilter.MUTUALS -> a.followedBy && following(a)
+                    PeopleFilter.FOLLOW_YOU -> a.followedBy
+                    PeopleFilter.NOT_BACK -> following(a) && !a.followedBy
+                }
+        }
+    }
+    val state = rememberLazyListState()
+    val nearEnd by remember { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.layoutInfo.totalItemsCount - 6 } }
+    LaunchedEffect(nearEnd) { if (nearEnd) vm.loadMore() }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -71,8 +130,115 @@ fun PeopleScreen(kind: String, actor: String, nav: Nav, onBack: () -> Unit) {
             )
         },
     ) { pad ->
-        PagedList(vm, Modifier.padding(top = pad.calculateTopPadding()), empty = if (kind == "followers") "No followers yet" else "Not following anyone yet") { a ->
-            PersonRow(a) { nav.profile(a.did) }
+        PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh() }, modifier = Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize().wrapContentWidth().widthIn(max = 680.dp), state = state, contentPadding = PaddingValues(bottom = 96.dp)) {
+                item(key = "search") {
+                    OutlinedTextField(
+                        query, { query = it },
+                        placeholder = { Text(if (kind == "followers") "Search followers" else "Search following") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                        trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear search") } },
+                        singleLine = true,
+                        shape = CircleShape,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                if (signedIn) item(key = "filters") {
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PeopleFilter.entries.forEach { f ->
+                            FilterChip(
+                                selected = filter == f, onClick = { filter = f }, label = { Text(f.label) },
+                                leadingIcon = if (filter == f) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null,
+                            )
+                        }
+                    }
+                }
+                if (narrowing && !vm.loading) item(key = "count") {
+                    Text(
+                        (if (shown.size == 1) "1 person" else "${shown.size} people") + if (vm.hasMore) " so far, still looking…" else "",
+                        style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+                when {
+                    vm.loading -> item { CenterLoading() }
+                    vm.error != null && vm.items.isEmpty() -> item { Message(vm.error!!, "Try again") { vm.refresh() } }
+                    vm.items.isEmpty() -> item { Message(if (kind == "followers") "No followers yet" else "Not following anyone yet") }
+                    shown.isEmpty() && !vm.hasMore -> item { Message(if (q.isNotEmpty()) "No one matches \"${query.trim()}\"" else "No one here") }
+                    else -> items(shown, key = { it.did }) { a ->
+                        PersonCard(
+                            a, following(a), signedIn && a.did != Graph.store.session.value?.did,
+                            onFollow = {
+                                val was = changed[a.did] ?: if (a.did in changed) null else a.followUri
+                                if (was == null) {
+                                    changed[a.did] = "pending"
+                                    vm.viewModelScope.launch { runCatching { Graph.atp.follow(a.did) }.onSuccess { changed[a.did] = it }.onFailure { changed[a.did] = null } }
+                                } else {
+                                    changed[a.did] = null
+                                    vm.viewModelScope.launch { runCatching { if (was != "pending") Graph.atp.undo(was) }.onFailure { changed[a.did] = was } }
+                                }
+                            },
+                            modifier = Modifier.animateItem(),
+                        ) { nav.profile(a.did) }
+                    }
+                }
+                if (vm.loadingMore) item(key = "more") { CenterLoading() }
+            }
+        }
+    }
+}
+
+/**
+ * A person in a list, easy to scan: picture, name, handle, how you're connected and the start of
+ * their bio, with a follow button.
+ */
+@Composable
+private fun PersonCard(a: Author, following: Boolean, canFollow: Boolean, onFollow: () -> Unit, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val relation = when {
+        a.followedBy && following -> "Mutuals"
+        a.followedBy -> "Follows you"
+        following -> "You follow"
+        else -> null
+    }
+    Row(
+        modifier.fillMaxWidth().clickable(onClickLabel = "Open profile", onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp)
+            .semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.Top,
+    ) {
+        Avatar(a.avatar, 48.dp)
+        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(a.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                VerifiedBadge(a, 16.dp)
+            }
+            Text("@${a.handle}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (relation != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (a.followedBy) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    modifier = Modifier.padding(top = 6.dp),
+                ) {
+                    Row(Modifier.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            when { relation == "Mutuals" -> Icons.Rounded.SyncAlt; a.followedBy -> Icons.Rounded.PersonAdd; else -> Icons.Rounded.Check },
+                            null, Modifier.size(14.dp),
+                            tint = if (a.followedBy) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            relation, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp),
+                            color = if (a.followedBy) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            a.description?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+            }
+        }
+        if (canFollow) {
+            val label = if (following) "Following" else if (a.followedBy) "Follow back" else "Follow"
+            if (following) OutlinedButton(onClick = onFollow, modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "Unfollow ${a.name}" }) { Text(label) }
+            else Button(onClick = onFollow, modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "$label ${a.name}" }) { Text(label) }
         }
     }
 }

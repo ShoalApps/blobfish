@@ -133,9 +133,14 @@ class PagedVm<T>(private val load: suspend (String?) -> Page<T>) : ViewModel() {
     var loading by mutableStateOf(true); private set
     var refreshing by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
+    /** More pages are waiting to be loaded. */
+    var hasMore by mutableStateOf(true); private set
+    var loadingMore by mutableStateOf(false); private set
     private var cursor: String? = null
     private var more = true
+        set(v) { field = v; hasMore = v }
     private var busy = false
+        set(v) { field = v; loadingMore = v }
 
     init { refresh(first = true) }
 

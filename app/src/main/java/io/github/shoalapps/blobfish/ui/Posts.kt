@@ -52,6 +52,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Verified
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
@@ -304,12 +309,34 @@ fun PostCard(
     if (!lineBelow) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
 }
 
-/** Bluesky's verification badges: a blue tick for verified accounts, a scalloped one for trusted verifiers. */
+/**
+ * Bluesky's verification badges, drawn the Material 3 Expressive way: a tick on a softly scalloped
+ * shape that slowly turns, with a little pop when it first appears. Verified accounts get a cookie
+ * shape, trusted verifiers (Bluesky, news organisations) a burst, echoing Bluesky's own two badges.
+ * Only the drawing animates, so long lists stay smooth; with animations off it stands still.
+ */
 @Composable
 fun VerifiedBadge(author: Author, size: androidx.compose.ui.unit.Dp) {
-    when {
-        author.verifier -> Icon(Icons.Rounded.Verified, "Trusted verifier", Modifier.padding(start = 3.dp).size(size), tint = Color(0xFF1083FE))
-        author.verified -> Icon(Icons.Rounded.CheckCircle, "Verified", Modifier.padding(start = 3.dp).size(size), tint = Color(0xFF1083FE))
+    if (!author.verifier && !author.verified) return
+    val verifier = author.verifier
+    val shape = remember(verifier) { PolygonShape(if (verifier) MaterialShapes.SoftBurst else MaterialShapes.Cookie9Sided) }
+    val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "badge")
+    // Read only while drawing (graphicsLayer), so turning never recomposes the post.
+    val turn = spin.animateFloat(
+        0f, 360f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(if (verifier) 14_000 else 20_000, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "turn",
+    )
+    val pop = remember { androidx.compose.animation.core.Animatable(0.6f) }
+    LaunchedEffect(Unit) { pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f)) }
+    Box(
+        Modifier.padding(start = 3.dp).size(size)
+            .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
+            .semantics { contentDescription = if (verifier) "Trusted verifier" else "Verified" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.matchParentSize().graphicsLayer { rotationZ = turn.value }.background(Color(0xFF1083FE), shape))
+        Icon(Icons.Rounded.Check, null, Modifier.fillMaxSize(0.7f), tint = Color.White)
     }
 }
 
