@@ -116,6 +116,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
     private val publicHost = "https://public.api.bsky.app"
 
     /** Bluesky's own "Discover" feed. */
+    private val MANY = "\u0000"
     val discoverFeed = "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/whats-hot"
 
     private val session get() = store.session.value
@@ -131,7 +132,8 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         val s = if (auth) session else null
         val host = s?.pds ?: if (method == "GET") publicHost else "https://bsky.social"
         val url = "$host/xrpc/$nsid".toHttpUrl().newBuilder().apply {
-            params.forEach { (k, v) -> if (v != null) addQueryParameter(k, v) }
+            // A value holding several values (joined with MANY) becomes the parameter repeated.
+            params.forEach { (k, v) -> v?.split(MANY)?.forEach { addQueryParameter(k, it) } }
         }.build()
         val req = Request.Builder().url(url).apply {
             if (s != null) header("Authorization", "Bearer ${s.access}")
@@ -277,6 +279,40 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     suspend fun feed(feed: String, cursor: String? = null): Page<FeedItem> =
         call("GET", "app.bsky.feed.getFeed", mapOf("feed" to feed, "limit" to "30", "cursor" to cursor)).let(::feedPage)
+
+    /** A pinned home tab: your Following timeline, a custom feed, or a list. */
+    data class PinnedFeed(val kind: String, val uri: String, val name: String)
+
+    /**
+     * Your pinned feeds in the order you set in Bluesky (savedFeedsPrefV2), named from Bluesky,
+     * for the home screen's tabs. Signed out, just Discover.
+     */
+    suspend fun pinnedFeeds(): List<PinnedFeed> {
+        if (session == null) return listOf(PinnedFeed("feed", discoverFeed, "Discover"))
+        val prefs = (call("GET", "app.bsky.actor.getPreferences")["preferences"] as? JsonArray).orEmpty().mapNotNull { it.obj }
+        val saved = prefs.lastOrNull { it.str("\$type") == prefType + "savedFeedsPrefV2" }?.get("items") as? JsonArray
+        val pinned = saved.orEmpty().mapNotNull { it.obj }.filter { (it["pinned"] as? JsonPrimitive)?.content == "true" }
+            .mapNotNull { o -> (o.str("type") ?: return@mapNotNull null) to (o.str("value") ?: return@mapNotNull null) }
+        if (pinned.isEmpty()) return listOf(PinnedFeed("timeline", "following", "Following"), PinnedFeed("feed", discoverFeed, "Discover"))
+        val feedUris = pinned.filter { it.first == "feed" }.map { it.second }
+        val names = mutableMapOf<String, String>()
+        if (feedUris.isNotEmpty()) runCatching {
+            val o = call("GET", "app.bsky.feed.getFeedGenerators", mapOf("feeds" to feedUris.joinToString(MANY)))
+            (o["feeds"] as? JsonArray).orEmpty().mapNotNull { it.obj }.forEach { f -> names[f.str("uri").orEmpty()] = f.str("displayName").orEmpty() }
+        }
+        pinned.filter { it.first == "list" }.forEach { (_, uri) ->
+            runCatching { names[uri] = call("GET", "app.bsky.graph.getList", mapOf("list" to uri, "limit" to "1"))["list"].obj.str("name").orEmpty() }
+        }
+        return pinned.map { (type, value) ->
+            when (type) {
+                "timeline" -> PinnedFeed("timeline", value, "Following")
+                else -> PinnedFeed(type, value, names[value]?.takeIf { it.isNotBlank() } ?: if (type == "list") "List" else "Feed")
+            }
+        }
+    }
+
+    suspend fun listFeed(list: String, cursor: String? = null): Page<FeedItem> =
+        call("GET", "app.bsky.feed.getListFeed", mapOf("list" to list, "limit" to "30", "cursor" to cursor)).let(::feedPage)
 
     suspend fun timeline(cursor: String? = null): Page<FeedItem> =
         call("GET", "app.bsky.feed.getTimeline", mapOf("limit" to "30", "cursor" to cursor)).let(::feedPage)

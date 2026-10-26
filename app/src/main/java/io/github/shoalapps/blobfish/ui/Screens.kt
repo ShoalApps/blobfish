@@ -80,6 +80,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -204,8 +205,11 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
 @Composable
 fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
     val session by Graph.store.session.collectAsState()
-    var tab by remember { mutableStateOf(0) }
-    val discover = viewModel(key = "discover") { PagedVm { c -> Graph.atp.feed(Graph.atp.discoverFeed, c) } }
+    // Your pinned feeds as tabs, in the order you set in Bluesky, like Bluesky's home.
+    val feeds by produceState(listOf(io.github.shoalapps.blobfish.data.Atp.PinnedFeed("feed", Graph.atp.discoverFeed, "Discover")), session?.did) {
+        runCatching { Graph.atp.pinnedFeeds() }.onSuccess { if (it.isNotEmpty()) value = it }
+    }
+    var tab by remember(feeds) { mutableStateOf(0) }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -214,10 +218,9 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
                     title = { Wordmark() },
                     actions = { IconButton(onClick = onSearch) { Icon(Icons.Rounded.Search, "Search") } },
                 )
-                if (session != null) {
-                    PrimaryTabRow(selectedTabIndex = tab) {
-                        Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Following") })
-                        Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Discover") })
+                if (feeds.size > 1) {
+                    androidx.compose.material3.PrimaryScrollableTabRow(selectedTabIndex = tab.coerceIn(0, feeds.lastIndex), edgePadding = 12.dp) {
+                        feeds.forEachIndexed { i, f -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(f.name, maxLines = 1) }) }
                     }
                 }
             }
@@ -227,12 +230,17 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
         },
     ) { pad ->
         Box(Modifier.padding(top = pad.calculateTopPadding())) {
-            if (session != null && tab == 0) {
-                val following = viewModel(key = "following-${session!!.did}") { PagedVm { c -> Graph.atp.timeline(c) } }
-                PagedList(following, empty = "Follow some people to fill your timeline") { FeedRow(it, nav, following = true) }
-            } else {
-                PagedList(discover) { FeedRow(it, nav) }
+            val f = feeds[tab.coerceIn(0, feeds.lastIndex)]
+            val vm = viewModel(key = "feed-${session?.did}-${f.kind}-${f.uri}") {
+                PagedVm { c ->
+                    when (f.kind) {
+                        "timeline" -> Graph.atp.timeline(c)
+                        "list" -> Graph.atp.listFeed(f.uri, c)
+                        else -> Graph.atp.feed(f.uri, c)
+                    }
+                }
             }
+            PagedList(vm, empty = if (f.kind == "timeline") "Follow some people to fill your timeline" else "Nothing here yet") { FeedRow(it, nav, following = f.kind == "timeline") }
         }
     }
 }
