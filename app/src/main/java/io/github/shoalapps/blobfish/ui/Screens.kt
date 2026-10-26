@@ -579,7 +579,7 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
     }
 }
 
-/** The profile picture in a slowly morphing, turning Material shape, like Anglerfish's About page. */
+/** The profile picture in a slowly morphing, turning Material shape, like Swordfish's About page. */
 @Composable
 fun MorphingAvatar(url: String?, size: androidx.compose.ui.unit.Dp) {
     val morph = remember { androidx.graphics.shapes.Morph(MaterialShapes.Cookie12Sided, MaterialShapes.Clover8Leaf) }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Blobfish's colours; Android 12+ swaps these for wallpaper colours (values-v31). -->
-    <color name="icon_bg">#FFFFD9E1</color>
-    <color name="icon_shape">#FF8C4A5E</color>
+    <!-- The icon's colours: its service's brand colours, softened the Material You way. -->
+    <color name="icon_bg">#FFDFE8FF</color>
+    <color name="icon_shape">#FF007AED</color>
     <color name="icon_glyph">#FFFFFFFF</color>
 </resources>
