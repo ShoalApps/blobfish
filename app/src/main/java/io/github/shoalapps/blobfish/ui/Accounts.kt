@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.shoalapps.blobfish.Graph
 import io.github.shoalapps.blobfish.R
+import kotlinx.coroutines.launch
 
 /** X's name and logo, or Twitter's when you'd rather call it that. */
 object XBrand {
@@ -176,3 +178,69 @@ fun XAccountScreen(onSwitch: () -> Unit) {
         }
     }
 }
+
+/**
+ * Choosing a server: Bluesky's, or your own address. Checked before it's saved.
+ * [appView] picks between a hosting provider (where accounts live) and an AppView (which builds feeds).
+ */
+@Composable
+fun ServerDialog(appView: Boolean, onDismiss: () -> Unit) {
+    val settings by Graph.store.settings.collectAsState()
+    val current = if (appView) settings.appView else settings.server
+    val isDefault = if (appView) current.isBlank() else current == io.github.shoalapps.blobfish.data.Settings.DEFAULT_SERVER
+    var custom by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(!isDefault) }
+    var address by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(if (isDefault) "" else current) }
+    var error by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var busy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun save(value: String) = Graph.store.updateSettings { if (appView) it.copy(appView = value) else it.copy(server = value) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (appView) "AppView" else "Hosting provider") },
+        text = {
+            Column {
+                Text(
+                    if (appView) "The service that builds your feeds, profiles and threads. Bluesky runs the main one; others, like community-run AppViews, can be used instead."
+                    else "Where your account lives. Bluesky Social for most people; your own address if your account is on another server (a PDS).",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Choice(if (appView) "Bluesky" else "Bluesky Social", !custom) { custom = false }
+                Choice("Custom", custom) { custom = true }
+                if (custom) androidx.compose.material3.OutlinedTextField(
+                    address, { address = it; error = null }, Modifier.fillMaxWidth().padding(top = 4.dp),
+                    label = { Text("Address") }, placeholder = { Text(if (appView) "appview.example.com" else "pds.example.com") }, singleLine = true,
+                    isError = error != null, supportingText = error?.let { { Text(it) } },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri),
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(enabled = !busy && (!custom || address.isNotBlank()), onClick = {
+                if (!custom) { save(if (appView) "" else io.github.shoalapps.blobfish.data.Settings.DEFAULT_SERVER); onDismiss(); return@TextButton }
+                busy = true
+                scope.launch {
+                    runCatching { Graph.atp.checkServer(address, appView) }
+                        .onSuccess { save(it); onDismiss() }
+                        .onFailure { error = friendly(it) }
+                    busy = false
+                }
+            }) { Text(if (busy) "Checking…" else "Save") }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp)
+            .semantics(mergeDescendants = true) { this.selected = selected; role = Role.RadioButton },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.RadioButton(selected, onClick = null)
+        Text(label, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
+/** A server's address without the https://. */
+fun shortHost(url: String) = url.removePrefix("https://").removePrefix("http://").trimEnd('/')

@@ -120,7 +120,8 @@ class AtpException(val status: Int, message: String) : Exception(message)
  */
 class Atp(private val http: OkHttpClient, private val store: Store) {
     private val json = Json { ignoreUnknownKeys = true }
-    private val publicHost = "https://public.api.bsky.app"
+    /** Where signed-out reads go: your chosen AppView, or Bluesky's. */
+    private val publicHost get() = store.settings.value.appView.ifBlank { Settings.BLUESKY_APPVIEW }
 
     /** Bluesky's own "Discover" feed. */
     private val MANY = "\u0000"
@@ -137,7 +138,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         retried: Boolean = false,
     ): JsonObject = withContext(Dispatchers.IO) {
         val s = if (auth) session else null
-        val host = s?.pds ?: if (method == "GET") publicHost else "https://bsky.social"
+        val host = s?.pds ?: if (method == "GET") publicHost else store.settings.value.server
         val url = "$host/xrpc/$nsid".toHttpUrl().newBuilder().apply {
             // A value holding several values (joined with MANY) becomes the parameter repeated.
             params.forEach { (k, v) -> v?.split(MANY)?.forEach { addQueryParameter(k, it) } }
@@ -149,6 +150,9 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             } else if (s != null) header("Authorization", "Bearer ${s.access}")
             // Labels are only included from labelers the request names: Bluesky's own, plus yours.
             header("atproto-accept-labelers", (listOf("${Moderation.BLUESKY_LABELER};redact") + store.moderation.value.labelers).joinToString(", "))
+            // A chosen AppView: your server forwards Bluesky calls there instead of to Bluesky's.
+            val appView = store.settings.value.appView
+            if (s != null && appView.isNotBlank() && nsid.startsWith("app.bsky.")) header("atproto-proxy", "did:web:${appView.toHttpUrl().host}#bsky_appview")
             if (method == "POST") post((body ?: JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
         }.build()
         http.newCall(req).execute().use { resp ->
@@ -181,11 +185,38 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     /** Signs in with a handle (or email) and an app password, finding the account's own server. */
     suspend fun signIn(identifier: String, password: String) {
-        val obj = call("POST", "com.atproto.server.createSession", body = buildJsonObject {
-            put("identifier", identifier.trim().removePrefix("@"))
+        val id = identifier.trim().removePrefix("@")
+        // A handle: sign in on that account's own server. An email: on your hosting provider.
+        val server = withContext(Dispatchers.IO) {
+            if (!id.contains('@') && id.contains('.')) runCatching { BskyOAuth.didDoc(http, BskyOAuth.didFor(http, id)).first }.getOrNull() else null
+        } ?: store.settings.value.server
+        val obj = callAt(server, "com.atproto.server.createSession", buildJsonObject {
+            put("identifier", id)
             put("password", password.trim())
-        }, auth = false)
-        store.setSession(sessionFrom(obj, fallbackPds = "https://bsky.social"))
+        })
+        store.setSession(sessionFrom(obj, fallbackPds = server))
+    }
+
+    /** A signed-out POST to a particular server. */
+    private suspend fun callAt(server: String, nsid: String, body: JsonObject): JsonObject = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("$server/xrpc/$nsid").post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        http.newCall(req).execute().use { resp ->
+            val obj = runCatching { json.parseToJsonElement(resp.body?.string().orEmpty()) as JsonObject }.getOrDefault(JsonObject(emptyMap()))
+            if (!resp.isSuccessful) throw AtpException(resp.code, obj.str("message") ?: obj.str("error") ?: "The server said ${resp.code}")
+            obj
+        }
+    }
+
+    /**
+     * Checks an address before it's saved: a hosting provider must describe itself as an AT Protocol
+     * server, an AppView must answer a profile lookup. Returns the tidied address.
+     */
+    suspend fun checkServer(address: String, appView: Boolean): String = withContext(Dispatchers.IO) {
+        val url = address.trim().trimEnd('/').let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
+        val probe = if (appView) "$url/xrpc/app.bsky.actor.getProfile?actor=bsky.app" else "$url/xrpc/com.atproto.server.describeServer"
+        val ok = runCatching { http.newCall(Request.Builder().url(probe).build()).execute().use { it.isSuccessful } }.getOrDefault(false)
+        if (!ok) throw AtpException(404, if (appView) "That doesn't look like an AppView" else "That doesn't look like an AT Protocol server")
+        url
     }
 
     private suspend fun refreshSession() = withContext(Dispatchers.IO) {

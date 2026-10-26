@@ -23,7 +23,16 @@ data class Settings(
     val service: String = "bluesky",
     /** Call X "Twitter", with the bird, everywhere in Blobfish. On unless you turn it off. */
     val twitterNames: Boolean = true,
-)
+    /** Your hosting provider (PDS or entryway) for signing in without a handle. Bluesky's by default. */
+    val server: String = DEFAULT_SERVER,
+    /** The AppView that builds feeds, profiles and threads; blank for Bluesky's. */
+    val appView: String = "",
+) {
+    companion object {
+        const val DEFAULT_SERVER = "https://bsky.social"
+        const val BLUESKY_APPVIEW = "https://public.api.bsky.app"
+    }
+}
 
 @Serializable
 private data class SavedSession(val did: String, val handle: String, val access: String, val refresh: String, val pds: String, val oauth: Boolean = false, val tokenUrl: String? = null)

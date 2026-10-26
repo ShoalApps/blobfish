@@ -688,10 +688,26 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
             )
+            // Hosting provider, as in Bluesky's app: Bluesky Social, or your own server.
+            val server = Graph.store.settings.collectAsState().value.server
+            var choosingServer by remember { mutableStateOf(false) }
+            if (choosingServer) ServerDialog(appView = false) { choosingServer = false }
+            Surface(
+                onClick = { choosingServer = true }, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            ) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Hosting provider", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (server == io.github.shoalapps.blobfish.data.Settings.DEFAULT_SERVER) "Bluesky Social" else shortHost(server), style = MaterialTheme.typography.bodyLarge)
+                    }
+                    Text("Change", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                }
+            }
             OutlinedTextField(
-                handle, { handle = it }, Modifier.fillMaxWidth().padding(top = 20.dp),
+                handle, { handle = it }, Modifier.fillMaxWidth().padding(top = 12.dp),
                 label = { Text("Your handle (optional)") }, placeholder = { Text("you.bsky.social") }, singleLine = true,
-                supportingText = { Text("Only needed if your account isn't on bsky.social") },
+                supportingText = { Text("With a handle, you sign in on that account's own server") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
             )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
@@ -886,6 +902,9 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
     val s by store.settings.collectAsState()
     val session by store.session.collectAsState()
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?" }
+    // Which server dialog is open: false = hosting provider, true = AppView.
+    var servers by remember { mutableStateOf<Boolean?>(null) }
+    servers?.let { ServerDialog(appView = it) { servers = null } }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } }) },
@@ -926,6 +945,10 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 if (s.showX && io.github.shoalapps.blobfish.ui.XView.signedIn) {
                     row { sh -> Link("Sign out of ${XBrand.name}", null, sh) { io.github.shoalapps.blobfish.ui.XView.signOut() } }
                 }
+            }
+            group("Servers") {
+                row { sh -> Link("Hosting provider", if (s.server == io.github.shoalapps.blobfish.data.Settings.DEFAULT_SERVER) "Bluesky Social" else shortHost(s.server), sh) { servers = false } }
+                row { sh -> Link("AppView", if (s.appView.isBlank()) "Bluesky" else shortHost(s.appView), sh) { servers = true } }
             }
             group("Moderation") {
                 row { sh -> Link("Moderation", "Content filters, muted words, hidden posts, muted accounts, replies and reposts", sh, onModeration) }

@@ -142,6 +142,8 @@ private fun NavHostController.goTab(route: String) = navigate(route) {
 @Composable
 private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
     val navController = rememberNavController()
+    // Somewhere to go once Blobfish's own screens are showing (they aren't while on your X account).
+    var pendingRoute by remember { mutableStateOf<String?>(null) }
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val wide = LocalConfiguration.current.screenWidthDp >= 600
@@ -174,7 +176,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                 "compose" -> { replyTo = null; composing = true }
                 "notifications", "search", "you" -> navController.goTab(link.host!!)
                 // From Shoal's Accounts screen.
-                "signin" -> navController.navigate("signin")
+                "signin" -> { Graph.store.updateSettings { it.copy(service = "bluesky") }; pendingRoute = "signin" }
                 "x" -> Graph.store.updateSettings { it.copy(showX = true, service = "x") }
             }
             onLinkHandled()
@@ -187,7 +189,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
     }
     val settings by Graph.store.settings.collectAsState()
     var switching by remember { mutableStateOf(false) }
-    if (switching) io.github.shoalapps.blobfish.ui.AccountSwitcher(onDismiss = { switching = false }, onSignInBluesky = { navController.navigate("signin") })
+    if (switching) io.github.shoalapps.blobfish.ui.AccountSwitcher(onDismiss = { switching = false }, onSignInBluesky = { Graph.store.updateSettings { it.copy(service = "bluesky") }; pendingRoute = "signin" })
     // Your X account: its website full screen, with a switcher back to Bluesky.
     if (settings.showX && settings.service == "x") {
         io.github.shoalapps.blobfish.ui.XAccountScreen(onSwitch = { switching = true })
@@ -243,6 +245,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                     composable("people/{kind}/{actor}") { e -> io.github.shoalapps.blobfish.ui.PeopleScreen(e.arguments?.getString("kind").orEmpty(), Uri.decode(e.arguments?.getString("actor").orEmpty()), nav, onBack = { navController.popBackStack() }) }
                     composable("editprofile") { io.github.shoalapps.blobfish.ui.EditProfileScreen(onBack = { navController.popBackStack() }) }
                 }
+                LaunchedEffect(pendingRoute) { pendingRoute?.let { navController.navigate(it); pendingRoute = null } }
             }
         }
         UpdatePrompt(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = if (!wide && isTab) 72.dp else 16.dp))

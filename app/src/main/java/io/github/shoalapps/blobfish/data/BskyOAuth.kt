@@ -126,12 +126,12 @@ object BskyOAuth {
 
     // ---- Finding your account's server ----
 
-    private fun didFor(http: OkHttpClient, handle: String): String =
+    internal fun didFor(http: OkHttpClient, handle: String): String =
         if (handle.startsWith("did:")) handle
-        else getJson(http, "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=" + Uri.encode(handle)).s("did") ?: throw AtpException(404, "Couldn't find @$handle")
+        else getJson(http, io.github.shoalapps.blobfish.Graph.store.settings.value.appView.ifBlank { io.github.shoalapps.blobfish.data.Settings.BLUESKY_APPVIEW } + "/xrpc/com.atproto.identity.resolveHandle?handle=" + Uri.encode(handle)).s("did") ?: throw AtpException(404, "Couldn't find @$handle")
 
     /** Your PDS and handle, from your DID document. */
-    private fun didDoc(http: OkHttpClient, did: String): Pair<String, String?> {
+    internal fun didDoc(http: OkHttpClient, did: String): Pair<String, String?> {
         val doc = if (did.startsWith("did:web:")) getJson(http, "https://${did.removePrefix("did:web:")}/.well-known/did.json") else getJson(http, "https://plc.directory/$did")
         val pds = (doc["service"] as? JsonArray)?.mapNotNull { it as? JsonObject }?.firstOrNull { it.s("id")?.endsWith("atproto_pds") == true }.s("serviceEndpoint")
             ?: throw AtpException(404, "Your account has no server listed")
@@ -156,7 +156,7 @@ object BskyOAuth {
             did = didFor(http, h)
             val (p, hh) = didDoc(http, did); pds = p; realHandle = hh
             authServerFor(http, p)
-        } else "https://bsky.social"
+        } else authServerFor(http, io.github.shoalapps.blobfish.Graph.store.settings.value.server)
         val meta = getJson(http, "$issuer/.well-known/oauth-authorization-server")
         val par = meta.s("pushed_authorization_request_endpoint") ?: throw AtpException(500, "Bluesky's sign-in isn't available")
         val authorize = meta.s("authorization_endpoint")!!
