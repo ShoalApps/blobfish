@@ -89,6 +89,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -548,7 +550,7 @@ private fun ProfileLinkChip(l: io.github.shoalapps.blobfish.data.ProfileLink) {
 }
 
 @Composable
-fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: (() -> Unit)? = null) {
+fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: (() -> Unit)? = null, onAccounts: (() -> Unit)? = null) {
     val vm = viewModel(key = "profile-$actor") { ProfileVm(actor) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -560,7 +562,13 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
             TopAppBar(
                 title = { Text(vm.profile?.author?.name.orEmpty(), maxLines = 1) },
                 navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
-                actions = { if (onSettings != null) IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, "Settings") } },
+                actions = {
+                    // Your own profile: switch accounts (Bluesky or X), as in Bluesky's app.
+                    if (onAccounts != null && Graph.store.settings.collectAsState().value.showX) IconButton(onClick = onAccounts) {
+                        Box(Modifier.semantics { contentDescription = "Switch account" }) { ServiceLogo(XBrand.logo, XBrand.colour, 26.dp) }
+                    }
+                    if (onSettings != null) IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, "Settings") }
+                },
             )
         },
     ) { pad ->
@@ -612,16 +620,19 @@ fun MorphingAvatar(url: String?, size: androidx.compose.ui.unit.Dp) {
 // ---------------- You ----------------
 
 @Composable
-fun YouScreen(nav: Nav, onSignIn: () -> Unit, onSettings: () -> Unit) {
+fun YouScreen(nav: Nav, onSignIn: () -> Unit, onSettings: () -> Unit, onAccounts: () -> Unit = {}) {
     val session by Graph.store.session.collectAsState()
     val s = session
     if (s != null) {
-        ProfileScreen(s.did, nav, onBack = null, onSettings = onSettings)
+        ProfileScreen(s.did, nav, onBack = null, onSettings = onSettings, onAccounts = onAccounts)
         return
     }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        topBar = { TopAppBar(title = {}, actions = { IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, "Settings") } }) },
+        topBar = { TopAppBar(title = {}, actions = {
+            if (Graph.store.settings.collectAsState().value.showX) IconButton(onClick = onAccounts) { AccountAvatar(null, bluesky = true, size = 28.dp) }
+            IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, "Settings") }
+        }) },
     ) { pad ->
         Column(
             Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).padding(32.dp),
@@ -909,10 +920,11 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
             group("Posts") {
                 row { sh -> Toggle("Rich formatting", "Show code blocks, bold and italic in posts, like mu", s.richFormatting, sh) { v -> store.updateSettings { it.copy(richFormatting = v) } } }
             }
-            group("X") {
-                row { sh -> Toggle("X tab", "x.com in its own tab, signed in on X's own page", s.showX, sh) { v -> store.updateSettings { it.copy(showX = v) } } }
+            group(XBrand.name) {
+                row { sh -> Toggle("Show my ${XBrand.name} account", "In the account switcher: x.com, signed in on its own page", s.showX, sh) { v -> store.updateSettings { it.copy(showX = v, service = if (!v) "bluesky" else it.service) } } }
+                row { sh -> Toggle("Call it Twitter", "Use Twitter's name and bird instead of X's", s.twitterNames, sh) { v -> store.updateSettings { it.copy(twitterNames = v) }; XView.rebrand() } }
                 if (s.showX && io.github.shoalapps.blobfish.ui.XView.signedIn) {
-                    row { sh -> Link("Sign out of X", null, sh) { io.github.shoalapps.blobfish.ui.XView.signOut() } }
+                    row { sh -> Link("Sign out of ${XBrand.name}", null, sh) { io.github.shoalapps.blobfish.ui.XView.signOut() } }
                 }
             }
             group("Moderation") {

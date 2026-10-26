@@ -17,8 +17,12 @@ data class Settings(
     val showReposts: Boolean = true,
     val showReplies: Boolean = true,
     val autoUpdate: Boolean = true,
-    /** An X tab showing x.com, signed in on X's own login. */
+    /** Your X account in the account switcher (x.com, signed in on X's own login). */
     val showX: Boolean = true,
+    /** Which account Blobfish is showing: "bluesky" or "x". */
+    val service: String = "bluesky",
+    /** Call X "Twitter", with the bird, everywhere in Blobfish. On unless you turn it off. */
+    val twitterNames: Boolean = true,
 )
 
 @Serializable

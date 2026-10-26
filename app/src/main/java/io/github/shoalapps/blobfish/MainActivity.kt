@@ -81,7 +81,6 @@ import io.github.shoalapps.blobfish.ui.YouScreen
 
 private data class Tab(val route: String, val label: String, val on: ImageVector, val off: ImageVector)
 
-private val xTab = Tab("x", "X", Icons.Rounded.AlternateEmail, Icons.Rounded.AlternateEmail)
 
 private val tabs = listOf(
     Tab("home", "Home", Icons.Rounded.Home, Icons.Outlined.Home),
@@ -176,7 +175,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                 "notifications", "search", "you" -> navController.goTab(link.host!!)
                 // From Shoal's Accounts screen.
                 "signin" -> navController.navigate("signin")
-                "x" -> { Graph.store.updateSettings { it.copy(showX = true) }; navController.goTab("x") }
+                "x" -> Graph.store.updateSettings { it.copy(showX = true, service = "x") }
             }
             onLinkHandled()
             return@LaunchedEffect
@@ -186,8 +185,14 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
         else if (segs.size >= 2) nav.profile(segs[1])
         onLinkHandled()
     }
-    val showX = Graph.store.settings.collectAsState().value.showX
-    val tabs = if (showX) tabs.take(3) + xTab + tabs.drop(3) else tabs
+    val settings by Graph.store.settings.collectAsState()
+    var switching by remember { mutableStateOf(false) }
+    if (switching) io.github.shoalapps.blobfish.ui.AccountSwitcher(onDismiss = { switching = false }, onSignInBluesky = { navController.navigate("signin") })
+    // Your X account: its website full screen, with a switcher back to Bluesky.
+    if (settings.showX && settings.service == "x") {
+        io.github.shoalapps.blobfish.ui.XAccountScreen(onSwitch = { switching = true })
+        return
+    }
     val isTab = tabs.any { it.route == route } || route == null
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
@@ -197,7 +202,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                     tabs.forEach { t ->
                         WideNavigationRailItem(
                             selected = route == t.route,
-                            onClick = { navController.goTab(t.route) },
+                            onClick = { if (t.route == "you" && route == "you") switching = true else navController.goTab(t.route) },
                             icon = { TabIcon(t, route == t.route) },
                             label = { Text(t.label) },
                             railExpanded = false,
@@ -214,7 +219,8 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                             tabs.forEach { t ->
                                 ShortNavigationBarItem(
                                     selected = route == t.route,
-                                    onClick = { navController.goTab(t.route) },
+                                    // Tapping You again opens your accounts, as in Bluesky's app.
+                                    onClick = { if (t.route == "you" && route == "you") switching = true else navController.goTab(t.route) },
                                     icon = { TabIcon(t, route == t.route) },
                                     label = { Text(t.label) },
                                 )
@@ -228,7 +234,7 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                     composable("search") { SearchScreen(nav, onBack = { navController.popBackStack() }) }
                     composable("search?q={q}") { e -> SearchScreen(nav, onBack = { navController.popBackStack() }, initial = e.arguments?.getString("q")) }
                     composable("notifications") { NotificationsScreen(nav, onSignIn = { navController.navigate("signin") }) }
-                    composable("you") { YouScreen(nav, onSignIn = { navController.navigate("signin") }, onSettings = { navController.navigate("settings") }) }
+                    composable("you") { YouScreen(nav, onSignIn = { navController.navigate("signin") }, onSettings = { navController.navigate("settings") }, onAccounts = { switching = true }) }
                     composable("post/{uri}") { e -> ThreadScreen(Uri.decode(e.arguments?.getString("uri").orEmpty()), nav, onBack = { navController.popBackStack() }) }
                     composable("profile/{actor}") { e -> ProfileScreen(Uri.decode(e.arguments?.getString("actor").orEmpty()), nav, onBack = { navController.popBackStack() }) }
                     composable("signin") { SignInScreen(onDone = { navController.popBackStack() }, onBack = { navController.popBackStack() }) }
@@ -236,7 +242,6 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                     composable("moderation") { ModerationScreen(onBack = { navController.popBackStack() }) }
                     composable("people/{kind}/{actor}") { e -> io.github.shoalapps.blobfish.ui.PeopleScreen(e.arguments?.getString("kind").orEmpty(), Uri.decode(e.arguments?.getString("actor").orEmpty()), nav, onBack = { navController.popBackStack() }) }
                     composable("editprofile") { io.github.shoalapps.blobfish.ui.EditProfileScreen(onBack = { navController.popBackStack() }) }
-                    composable("x") { io.github.shoalapps.blobfish.ui.XScreen() }
                 }
             }
         }
