@@ -13,6 +13,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import androidx.compose.ui.test.onAllNodesWithText
 import org.junit.runner.RunWith
 
 /** Needs the network: reads Bluesky's public Discover feed, signed out. */
@@ -39,8 +40,10 @@ class FeedTest {
         repeat(6) {
             // Where each one really is, not clipped to the screen (clipping squashes off-screen items together).
             // Only items wholly on screen count: the list keeps partly scrolled-away items around at stale positions.
+            // Anything under the top bar is a post scrolled past, left at a stale position: skip it.
+            val barBottom = compose.onAllNodesWithText("Blobfish").fetchSemanticsNodes().maxOfOrNull { it.boundsInRoot.bottom } ?: 0f
             fun rects(tag: String) = nodes(tag).fetchSemanticsNodes()
-                .filter { it.boundsInRoot.height.toInt() == it.size.height }
+                .filter { it.boundsInRoot.height.toInt() == it.size.height && it.positionInRoot.y >= barBottom }
                 .map { androidx.compose.ui.geometry.Rect(it.positionInRoot, androidx.compose.ui.geometry.Size(it.size.width.toFloat(), it.size.height.toFloat())) }
             val images = rects("post-image")
             val actions = rects("post-actions")
