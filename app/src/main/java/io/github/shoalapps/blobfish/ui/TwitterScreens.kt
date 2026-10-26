@@ -144,13 +144,15 @@ private fun TwitterHome(nav: Nav, onSwitch: () -> Unit) {
 private fun TwitterSearch(nav: Nav, initial: String?) {
     var query by rememberSaveable { mutableStateOf(initial.orEmpty()) }
     var submitted by rememberSaveable { mutableStateOf(initial) }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         OutlinedTextField(
             query, { query = it }, Modifier.fillMaxWidth().padding(16.dp),
             placeholder = { Text("Search ${XBrand.name}") }, singleLine = true, leadingIcon = { Icon(Icons.Rounded.Search, null) },
             shape = androidx.compose.foundation.shape.CircleShape,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitted = query.trim().takeIf { it.isNotEmpty() } }),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submitted = query.trim().takeIf { it.isNotEmpty() }; keyboard?.hide() }),
+            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(androidx.compose.material.icons.Icons.Rounded.Close, "Clear search") } },
         )
         submitted?.let { q ->
             val vm = viewModel(key = "x-search-$q") { PagedVm { c -> XBridge.search(q, c) } }
