@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SwitchAccount
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -565,7 +566,7 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
                 actions = {
                     // Your own profile: switch accounts (Bluesky or X), as in Bluesky's app.
                     if (onAccounts != null && Graph.store.settings.collectAsState().value.showX) IconButton(onClick = onAccounts) {
-                        Box(Modifier.semantics { contentDescription = "Switch account" }) { ServiceLogo(XBrand.logo, XBrand.colour, 26.dp) }
+                        Icon(Icons.Rounded.SwitchAccount, "Switch account")
                     }
                     if (onSettings != null) IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, "Settings") }
                 },
@@ -630,7 +631,7 @@ fun YouScreen(nav: Nav, onSignIn: () -> Unit, onSettings: () -> Unit, onAccounts
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = { TopAppBar(title = {}, actions = {
-            if (Graph.store.settings.collectAsState().value.showX) IconButton(onClick = onAccounts) { AccountAvatar(null, bluesky = true, size = 28.dp) }
+            if (Graph.store.settings.collectAsState().value.showX) IconButton(onClick = onAccounts) { Icon(Icons.Rounded.SwitchAccount, "Switch account") }
             IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, "Settings") }
         }) },
     ) { pad ->
@@ -910,6 +911,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
         topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } }) },
     ) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
+            item(key = "support") { SupportCard { openLink(context, "https://liberapay.com/ShoalApps") } }
             group("Account") {
                 val sess = session
                 if (sess != null) {
@@ -965,7 +967,6 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 if (io.github.shoalapps.blobfish.Telemetry.available) row { sh -> Toggle("Send error reports", "Anonymous crash and error reports help fix bugs. Never your accounts or history.", io.github.shoalapps.blobfish.Telemetry.enabled, sh) { v -> io.github.shoalapps.blobfish.Telemetry.setEnabled(context, v) } }
                 row { sh -> Link("Privacy policy", "What Blobfish sends, and to whom", sh) { openLink(context, "https://shoalapps.github.io/privacy.html") } }
                 row { sh -> Link("Legal", "Licences, trademarks and notices", sh) { openLink(context, "https://shoalapps.github.io/legal.html") } }
-                row { sh -> Link("Support Shoal", "Shoal is free and has no ads; donations on Liberapay keep it going", sh) { openLink(context, "https://liberapay.com/ShoalApps") } }
                 row { sh -> Link("Source code", "github.com/ShoalApps/blobfish", sh) { openLink(context, "https://github.com/ShoalApps/blobfish") } }
                 row { sh -> Link("Shoal", "shoalapps.github.io: all the apps and their credits", sh) { openLink(context, "https://shoalapps.github.io") } }
                 row { sh ->
