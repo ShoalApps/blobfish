@@ -230,6 +230,9 @@ object XBridge {
      * presses Post. Returns whether it went.
      */
     suspend fun compose(text: String, replyToId: String?): Boolean = lock.withLock {
+        // A prefilled intent does not guarantee the website attached the parent post.
+        // Never submit a reply until we can verify its parent before posting.
+        if (replyToId != null) return@withLock false
         withContext(Dispatchers.Main) {
             val v = view()
             val url = "https://x.com/intent/post?text=" + java.net.URLEncoder.encode(text, "UTF-8") + (replyToId?.let { "&in_reply_to=$it" } ?: "")

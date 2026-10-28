@@ -174,14 +174,16 @@ private fun TwitterComposer(replyTo: Post?, onDone: () -> Unit) {
         onDismissRequest = { if (!busy) onDone() },
         title = { Text(if (replyTo != null) "Reply to @${replyTo.author.handle}" else "New post") },
         text = {
-            OutlinedTextField(
+            if (replyTo != null) {
+                Text("Replies are temporarily unavailable here because they may be sent as new posts. Open the original post on Twitter to reply.")
+            } else OutlinedTextField(
                 text, { if (it.length <= 280) text = it }, Modifier.fillMaxWidth(),
                 placeholder = { Text("What's happening?") }, minLines = 4,
                 supportingText = { Text("${text.length} / 280") },
             )
         },
         confirmButton = {
-            androidx.compose.material3.Button(enabled = text.isNotBlank() && !busy, onClick = {
+            androidx.compose.material3.Button(enabled = replyTo == null && text.isNotBlank() && !busy, onClick = {
                 busy = true
                 scope.launch {
                     val ok = XBridge.compose(text.trim(), replyTo?.uri?.removePrefix(TwitterParse.PREFIX))
@@ -191,6 +193,18 @@ private fun TwitterComposer(replyTo: Post?, onDone: () -> Unit) {
                 }
             }) { Text(if (busy) "Posting…" else "Post") }
         },
-        dismissButton = { androidx.compose.material3.TextButton(enabled = !busy, onClick = onDone) { Text("Cancel") } },
+        dismissButton = {
+            androidx.compose.foundation.layout.Row {
+                if (replyTo != null) {
+                    val id = replyTo.uri.removePrefix(TwitterParse.PREFIX)
+                    androidx.compose.material3.TextButton(enabled = id.isNotEmpty() && id.all(Char::isDigit), onClick = {
+                        runCatching {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://x.com/i/status/$id")))
+                        }.onSuccess { onDone() }.onFailure { toast(context, "Couldn't open Twitter") }
+                    }) { Text("Open on Twitter") }
+                }
+                androidx.compose.material3.TextButton(enabled = !busy, onClick = onDone) { Text("Cancel") }
+            }
+        },
     )
 }

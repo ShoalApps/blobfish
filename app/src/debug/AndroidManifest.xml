@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Release-signed Shoal apps own these permissions on a device with the release installed. -->
+    <permission android:name="io.github.shoalapps.permission.MOVE_DATA" tools:node="remove" />
+</manifest>
