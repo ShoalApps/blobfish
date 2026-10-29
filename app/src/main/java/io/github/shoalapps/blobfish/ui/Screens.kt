@@ -825,7 +825,7 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
                                 }
                                 Graph.atp.post(text.trim(), replyTo, images)
                             }
-                                .onSuccess { toast(context, "Posted"); onDismiss() }
+                                .onSuccess { toast(context, "Saved to send. Check saved actions for sync status."); onDismiss() }
                                 .onFailure { toast(context, friendly(it)) }
                             busy = false
                         }

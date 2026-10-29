@@ -108,6 +108,7 @@ class OfflineStore(context: Context) {
             try {
                 if (owner() != owner) { state(next.id, "pending"); break }
                 Graph.atp.sendSaved(next)
+                runCatching { updateViews(next) }
                 state(next.id, null)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 state(next.id, "pending"); throw e
@@ -130,9 +131,45 @@ class OfflineStore(context: Context) {
         }
         return result
     }
-    private fun path(key: String, namespace: String): File = File(cache, MessageDigest.getInstance("SHA-256").digest(
-        (namespace + "|" + key).toByteArray()
-    ).joinToString("") { "%02x".format(it) } + ".json")
+    private fun hash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun path(key: String, namespace: String) = File(cache, hash(namespace) + "-" + hash(key) + ".json")
+    @Synchronized private fun updateViews(write: SavedWrite) {
+        val collection = write.body["collection"]?.jsonPrimitive?.content ?: return
+        val field = when (collection) {
+            "app.bsky.feed.like" -> "like"
+            "app.bsky.feed.repost" -> "repost"
+            "app.bsky.graph.follow" -> "following"
+            else -> return
+        }
+        val repo = write.body["repo"]?.jsonPrimitive?.content ?: return
+        val key = write.body["rkey"]?.jsonPrimitive?.content ?: return
+        val uri = "at://"+repo+"/"+collection+"/"+key
+        val record = write.body["record"] as? JsonObject
+        val subject = record?.get("subject")
+        val target = if (subject is JsonObject) subject["uri"]?.jsonPrimitive?.content else (subject as? JsonPrimitive)?.content
+        fun patch(element: JsonElement): JsonElement = when (element) {
+            is JsonArray -> JsonArray(element.map(::patch))
+            is JsonObject -> {
+                val result = element.mapValues { patch(it.value) }.toMutableMap()
+                val viewer = (result["viewer"] as? JsonObject)?.toMutableMap() ?: mutableMapOf()
+                if (write.endpoint.endsWith("deleteRecord") && viewer[field]?.jsonPrimitive?.content == uri) viewer.remove(field)
+                if (write.endpoint.endsWith("putRecord") && target != null &&
+                    (element["uri"]?.let { (it as? JsonPrimitive)?.content } == target ||
+                     element["did"]?.let { (it as? JsonPrimitive)?.content } == target)) viewer[field] = JsonPrimitive(uri)
+                if (element["viewer"] != null || viewer.isNotEmpty()) result["viewer"] = JsonObject(viewer)
+                JsonObject(result)
+            }
+            else -> element
+        }
+        val prefix = hash(write.owner + "|" + Graph.store.settings.value.appView) + "-"
+        cache.listFiles().orEmpty().filter { it.name.startsWith(prefix) && it.extension == "json" }.forEach { saved ->
+            val updated = runCatching { patch(json.parseToJsonElement(saved.readText())).toString() }.getOrNull() ?: return@forEach
+            val atomic = AtomicFile(saved)
+            val out = atomic.startWrite()
+            try { out.write(updated.toByteArray()); atomic.finishWrite(out) }
+            catch (e: Exception) { atomic.failWrite(out) }
+        }
+    }
     @Synchronized fun cached(key: String, namespace: String): JsonObject = runCatching {
         json.parseToJsonElement(path(key, namespace).readText()).jsonObject
     }.getOrElse { throw IOException("No saved copy of this view yet. Open it while online first.") }
