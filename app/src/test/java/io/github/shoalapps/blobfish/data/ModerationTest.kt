@@ -44,7 +44,7 @@ class ModerationTest {
         assertTrue(Moderation.decide(post(author = private), defaults, signedIn = false) is Decision.Hide)
         assertEquals(Decision.Show, Moderation.decide(post(author = private), defaults, signedIn = true))
         assertTrue(Moderation.decide(post(author = alice.copy(blocking = true)), defaults, true) is Decision.Hide)
-        assertTrue(Moderation.decide(post(author = alice.copy(muted = true)), defaults, true) is Decision.Warn)
+        assertTrue(Moderation.decide(post(author = alice.copy(muted = true)), defaults, true) is Decision.Hide)
         assertTrue(Moderation.decide(post(), defaults.copy(hiddenPosts = setOf("at://did:alice/app.bsky.feed.post/1")), true) is Decision.Hide)
     }
 
@@ -74,4 +74,15 @@ class ModerationTest {
         assertTrue(Moderation.hiddenInFeed(FeedItem(post(), bob, null), defaults.copy(hideReposts = true)))
         assertFalse(Moderation.hiddenInFeed(FeedItem(post(), bob, null), defaults))
     }
+    @Test fun hiddenLabelsAlwaysOutrankWarnings() {
+        val hidden = post(labels = listOf("!warn", "porn"))
+        assertTrue(Moderation.decide(hidden, defaults, true) is Decision.Hide)
+        assertTrue(Moderation.decide(hidden.copy(author = alice.copy(muted = true)), defaults, true) is Decision.Hide)
+    }
+
+    @Test fun videoWarningsCoverThePlayer() {
+        val video = post(labels = listOf("graphic-media")).copy(media = listOf(PlayableMedia(listOf(MediaSource("https://example.com/video.m3u8", "application/x-mpegURL")), null, "", 1f)))
+        assertEquals(Decision.BlurMedia("Graphic media"), Moderation.decide(video, defaults, true))
+    }
+
 }

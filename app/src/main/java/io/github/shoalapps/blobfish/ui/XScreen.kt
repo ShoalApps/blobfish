@@ -48,7 +48,7 @@ object XView {
         setBackgroundColor(android.graphics.Color.BLACK)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.mediaPlaybackRequiresUserGesture = false
+        settings.mediaPlaybackRequiresUserGesture = true
         val wide = context.resources.configuration.screenWidthDp >= 900
         settings.userAgentString = chromeAgent(settings.userAgentString, wide)
         settings.useWideViewPort = wide
@@ -145,7 +145,7 @@ fun XScreen() {
         web.post(tick)
         onDispose {
             web.removeCallbacks(tick)
-            web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())", null)
+            web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(v=>v.pause())", null)
             web.onPause()
         }
     }
