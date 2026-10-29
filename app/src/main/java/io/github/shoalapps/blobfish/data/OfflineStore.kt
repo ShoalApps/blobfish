@@ -66,6 +66,7 @@ class OfflineStore(context: Context) {
     }
     fun init() {
         retry()
+        schedule()
         changed()
         cm?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = changed()
@@ -90,7 +91,15 @@ class OfflineStore(context: Context) {
         val owner = owner() ?: throw IOException("Sign in before saving an action")
         check(body["repo"] == null || body["repo"]?.jsonPrimitive?.content == Graph.store.session.value?.did)
         synchronized(this) { save(RecordKeys.add(writes.value, SavedWrite(owner = owner, endpoint = endpoint, body = body))) }
+        schedule()
         Graph.scope.launch { flush() }
+    }
+    fun schedule() {
+        if (writes.value.none { it.owner == owner() && it.state in setOf("pending", "failed") }) return
+        val request = androidx.work.OneTimeWorkRequestBuilder<BlueskySyncWorker>()
+            .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+            .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, java.util.concurrent.TimeUnit.SECONDS).build()
+        androidx.work.WorkManager.getInstance(Graph.app).enqueueUniqueWork("bluesky-outbox-sync", androidx.work.ExistingWorkPolicy.KEEP, request)
     }
     suspend fun flush() = lock.withLock {
         while (allowed()) {
@@ -137,5 +146,16 @@ class OfflineStore(context: Context) {
         val files = cache.listFiles().orEmpty().sortedByDescending { it.lastModified() }
         var size = 0L
         files.forEachIndexed { i, f -> size += f.length(); if (i >= 100 || size > 20_000_000) f.delete() }
+    }
+}
+
+
+class BlueskySyncWorker(context: Context, params: androidx.work.WorkerParameters) : androidx.work.CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        if (!Graph.offline.allowed()) return Result.retry()
+        Graph.offline.retry()
+        Graph.offline.flush()
+        return if (Graph.offline.writes.value.any { it.owner == Graph.offline.owner() && it.state in setOf("pending", "failed") })
+            Result.retry() else Result.success()
     }
 }

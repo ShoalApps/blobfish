@@ -153,6 +153,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         auth: Boolean = session != null,
         retried: Boolean = false,
         sendQueued: Boolean = false,
+        expectedOwner: String? = null,
     ): JsonObject = withContext(Dispatchers.IO) {
         if (method == "POST" && !sendQueued && nsid in setOf("app.bsky.actor.putPreferences",
             "app.bsky.graph.muteActor", "app.bsky.graph.unmuteActor", "com.atproto.repo.putRecord")) {
@@ -163,6 +164,8 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         val cacheKey = nsid + params.toSortedMap().toString()
         if (method == "GET" && !Graph.offline.available()) return@withContext Graph.offline.cached(cacheKey, namespace)
         val s = if (auth) session else null
+        if (expectedOwner != null && s?.let { it.did + "|" + it.pds } != expectedOwner)
+            throw AtpException(401, "This saved action belongs to another account")
         if (body?.get("repo") != null && body["repo"]?.jsonPrimitive?.content != s?.did)
             throw AtpException(401, "This saved action belongs to a different account")
         val host = s?.pds ?: if (method == "GET") publicHost else store.settings.value.server
@@ -189,16 +192,16 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
                 BskyOAuth.remember(url.toString(), resp)
                 val challenge = resp.header("WWW-Authenticate").orEmpty()
                 // The PDS wants a fresh nonce: try again with it.
-                if (resp.code == 401 && challenge.contains("use_dpop_nonce") && !retried) return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued)
+                if (resp.code == 401 && challenge.contains("use_dpop_nonce") && !retried) return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued, expectedOwner = expectedOwner)
                 // The access token ran out: refresh it and try again.
                 if (resp.code == 401 && (challenge.contains("invalid_token") || obj.str("error") == "invalid_token") && !retried) {
                     refreshSession()
-                    return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued)
+                    return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued, expectedOwner = expectedOwner)
                 }
             }
             if (resp.code == 400 && obj.str("error") == "ExpiredToken" && s != null && !retried) {
                 refreshSession()
-                return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued)
+                return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued, expectedOwner = expectedOwner)
             }
             if (!resp.isSuccessful) throw AtpException(resp.code, obj.str("message") ?: obj.str("error") ?: "Bluesky said ${resp.code}")
             if (method == "GET") Graph.offline.remember(cacheKey, obj, namespace)
@@ -459,7 +462,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     internal suspend fun sendSaved(write: SavedWrite) {
         if (Graph.offline.owner() != write.owner) throw AtpException(401, "Different account")
-        call("POST", write.endpoint, body = write.body, sendQueued = true)
+        call("POST", write.endpoint, body = write.body, sendQueued = true, expectedOwner = write.owner)
     }
 
     private fun requireSession() = session ?: throw AtpException(401, "Sign in to do that")
