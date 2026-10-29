@@ -41,12 +41,12 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import io.github.shoalapps.blobfish.LocalisedIcon as Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import io.github.shoalapps.blobfish.LocalisedText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.automirrored.rounded.Reply
@@ -278,7 +278,7 @@ fun PostCard(
             Avatar(post.author.avatar, if (big) 48.dp else 40.dp, Modifier.clickable { nav.profile(post.author.did) })
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(post.author.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(post.author.name, localise = false, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     VerifiedBadge(post.author, 15.dp)
                     Text(
                         " @${post.author.handle} · ${shortAgo(post.createdAt)}",
@@ -369,7 +369,7 @@ fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
             Avatar(post.author.avatar, 40.dp, Modifier.clickable { nav.profile(post.author.did) })
             Column(Modifier.padding(start = 12.dp).weight(1f).clickable { nav.profile(post.author.did) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(post.author.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(post.author.name, localise = false, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     VerifiedBadge(post.author, 16.dp)
                 }
                 Text("@${post.author.handle}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -446,7 +446,7 @@ fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(q.author.avatar, 20.dp)
-                Text(q.author.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
+                Text(q.author.name, localise = false, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
                 VerifiedBadge(q.author, 13.dp)
                 Text(" @${q.author.handle} · ${shortAgo(q.createdAt)}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -521,7 +521,7 @@ private fun LinkCardView(card: io.github.shoalapps.blobfish.data.LinkCard, modif
             card.thumb?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(1.91f)) }
             Column(Modifier.padding(12.dp)) {
                 Text(Uri.parse(card.uri).host.orEmpty(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (card.title.isNotBlank()) Text(card.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (card.title.isNotBlank()) Text(card.title, localise = false, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (card.description.isNotBlank()) Text(card.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }

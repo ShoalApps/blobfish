@@ -3,6 +3,7 @@ package io.github.shoalapps.blobfish
 import androidx.compose.ui.test.SemanticsNodeInteractionCollection
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
@@ -33,6 +34,14 @@ class FeedTest {
             compose.waitForIdle()
         }
         assertTrue("no photo posts in the feed", count("post-image") > 0)
+    }
+
+    @org.junit.Before fun dismissReleaseNotes() {
+        compose.waitForIdle()
+        if (compose.onAllNodesWithText("Let's dive in").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Let's dive in").performClick()
+            compose.waitForIdle()
+        }
     }
 
     @Test fun photosStayInsideTheirPost() {

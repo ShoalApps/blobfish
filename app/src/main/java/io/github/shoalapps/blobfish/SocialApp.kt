@@ -24,8 +24,10 @@ import okio.Path.Companion.toOkioPath
 import java.util.concurrent.TimeUnit
 
 class SocialApp : Application(), SingletonImageLoader.Factory {
+    override fun attachBaseContext(base: android.content.Context) { super.attachBaseContext(AppLanguage.wrap(base)) }
     override fun onCreate() {
         super.onCreate()
+        AppLanguage.init(this)
         Telemetry.init(this)
         DataMover.run(this)
         Graph.app = this

@@ -67,11 +67,11 @@ object Telemetry {
     fun askOnce(activity: Activity) {
         if (!available || prefs(activity).getBoolean("asked", false)) return
         android.app.AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Help fix bugs?")
-            .setMessage("Blobfish can send anonymous crash and error reports to Shoal (through Sentry) so problems get fixed. They include the error, the app and Android version and the phone model, never your accounts, history or anything you've looked at. You can change this in Settings.")
-            .setPositiveButton("Send reports") { _, _ -> setEnabled(activity, true) }
-            .setNegativeButton("No thanks") { _, _ -> setEnabled(activity, false) }
-            .setNeutralButton("Privacy policy") { _, _ ->
+            .setTitle(io.github.shoalapps.blobfish.AppLanguage.translate("Help fix bugs?"))
+            .setMessage(io.github.shoalapps.blobfish.AppLanguage.translate("Blobfish can send anonymous crash and error reports to Shoal (through Sentry) so problems get fixed. They include the error, the app and Android version and the phone model, never your accounts, history or anything you've looked at. You can change this in Settings."))
+            .setPositiveButton(io.github.shoalapps.blobfish.AppLanguage.translate("Send reports")) { _, _ -> setEnabled(activity, true) }
+            .setNegativeButton(io.github.shoalapps.blobfish.AppLanguage.translate("No thanks")) { _, _ -> setEnabled(activity, false) }
+            .setNeutralButton(io.github.shoalapps.blobfish.AppLanguage.translate("Privacy policy")) { _, _ ->
                 runCatching { activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://shoalapps.github.io/privacy.html"))) }
             }
             .setCancelable(false)

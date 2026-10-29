@@ -30,10 +30,10 @@ object ShoalManager {
             }.onSuccess { return }
         }
         AlertDialog.Builder(context, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Get Shoal")
-            .setMessage("Shoal installs and updates all the Shoal apps, and can do it silently with Shizuku or root.")
-            .setPositiveButton("Download") { _, _ -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DOWNLOAD))) } }
-            .setNegativeButton("Not now", null)
+            .setTitle(io.github.shoalapps.blobfish.AppLanguage.translate("Get Shoal"))
+            .setMessage(io.github.shoalapps.blobfish.AppLanguage.translate("Shoal installs and updates all the Shoal apps, and can do it silently with Shizuku or root."))
+            .setPositiveButton(io.github.shoalapps.blobfish.AppLanguage.translate("Download")) { _, _ -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DOWNLOAD))) } }
+            .setNegativeButton(io.github.shoalapps.blobfish.AppLanguage.translate("Not now"), null)
             .show()
     }
 }
