@@ -1,4 +1,4 @@
-# Blobfish
+<p align="center"><a href="https://shoalapps.github.io/"><img src="https://raw.githubusercontent.com/ShoalApps/shoalapps.github.io/main/assets/readme/blobfish.svg" alt="Blobfish - a Shoal app, with the rest of the Shoal family" width="100%"></a></p>
 
 A Material You client for Bluesky, part of [Shoal](https://shoalapps.github.io): open-source Android apps
 that take on your wallpaper's colours.

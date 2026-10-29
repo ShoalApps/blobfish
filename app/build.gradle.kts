@@ -64,6 +64,9 @@ android {
 }
 
 dependencies {
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
     implementation("androidx.webkit:webkit:1.14.0")
     // Bluesky's sign-in page in a browser tab.
     implementation("androidx.browser:browser:1.8.0")

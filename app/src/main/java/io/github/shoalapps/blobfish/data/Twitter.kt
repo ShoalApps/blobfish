@@ -134,7 +134,7 @@ object TwitterParse {
         val entities = note?.obj("entity_set") ?: legacy.obj("entities")
         val (text, facets) = textAndFacets(rawText, entities, legacy.obj("extended_entities"))
         val media = legacy.obj("extended_entities")?.arr("media") ?: legacy.obj("entities")?.arr("media").orEmpty()
-        val images = media.mapNotNull { m ->
+        val images = media.filter { it.str("type") == "photo" }.mapNotNull { m ->
             val url = m.str("media_url_https") ?: return@mapNotNull null
             val w = m.obj("original_info")?.int("width") ?: 0
             val h = m.obj("original_info")?.int("height") ?: 0
@@ -153,7 +153,8 @@ object TwitterParse {
             likeCount = legacy.int("favorite_count") ?: 0,
             quoteCount = legacy.int("quote_count") ?: 0,
             images = images,
-            card = null,
+            media = MediaParsing.twitter(media),
+            card = t.obj("card")?.let { LinkCard("https://x.com/i/status/$id", "Open media on Twitter", "Play this card, Space or broadcast on Twitter", null) },
             quote = quote,
             myLike = if (legacy.bool("favorited") == true) "x-like" else null,
             myRepost = if (legacy.bool("retweeted") == true) "x-repost" else null,

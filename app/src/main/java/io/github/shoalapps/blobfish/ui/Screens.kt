@@ -200,6 +200,7 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
     val prefs = Graph.store.moderation.collectAsState().value
     // Reply, repost and quote options are for the Following timeline only, as in Bluesky's app.
     if (following && Moderation.hiddenInFeed(item, prefs)) return
+    if (Moderation.decide(item.post, prefs, Graph.store.session.value != null) is Moderation.Decision.Hide) return
     val parent = item.parent
     if (parent != null && Moderation.decide(parent, prefs, Graph.store.session.value != null) !is Moderation.Decision.Hide) {
         // Like Bluesky: the post being replied to, then the reply, joined by the thread line.
@@ -423,7 +424,7 @@ fun ThreadScreen(uri: String, nav: Nav, onBack: () -> Unit) {
                 t == null -> item { CenterLoading() }
                 else -> {
                     // The conversation above, joined by Bluesky's thread line down to the post.
-                    itemsIndexed(t.parents, key = { _, p -> p.uri }) { i, p -> PostCard(p, nav, noteWhenHidden = true, lineAbove = i > 0, lineBelow = true) }
+                    itemsIndexed(t.parents, key = { _, p -> p.uri }) { i, p -> PostCard(p, nav, lineAbove = i > 0, lineBelow = true) }
                     item(key = t.focus.post.uri) { AnchorPost(t.focus.post, nav, lineAbove = t.parents.isNotEmpty()) }
                     t.focus.replies.forEach { replies(it, nav, depth = 0, lineAbove = false) }
                 }
@@ -440,7 +441,7 @@ private fun LazyListScope.replies(n: ThreadNode, nav: Nav, depth: Int, lineAbove
     val continues = n.replies.isNotEmpty() && depth < 6
     item(key = n.post.uri) {
         Box(Modifier.padding(start = (depth * 28).dp)) {
-            PostCard(n.post, nav, noteWhenHidden = true, lineAbove = lineAbove, lineBelow = continues)
+            PostCard(n.post, nav, lineAbove = lineAbove, lineBelow = continues)
         }
     }
     if (!continues) return

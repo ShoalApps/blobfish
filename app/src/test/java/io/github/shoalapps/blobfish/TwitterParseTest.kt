@@ -60,4 +60,11 @@ class TwitterParseTest {
         assertTrue(real.items.size >= 10)
         assertTrue(real.items.all { it.post.author.handle.isNotBlank() })
     }
+    @Test fun videosAreNotParsedAsStillPhotos() {
+        val input = tweet("8", "", ",\"extended_entities\":{\"media\":[{\"type\":\"video\",\"media_url_https\":\"https://pbs.twimg.com/poster.jpg\",\"video_info\":{\"variants\":[{\"content_type\":\"video/mp4\",\"url\":\"https://video.twimg.com/video.mp4\"}]}}]}")
+        val parsed = TwitterParse.tweet(Json.parseToJsonElement(input) as JsonObject)!!
+        assertTrue(parsed.images.isEmpty())
+        assertEquals("https://video.twimg.com/video.mp4", parsed.media.single().sources.single().url)
+    }
+
 }

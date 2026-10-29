@@ -50,6 +50,15 @@ data class Author(
 data class Image(val thumb: String, val full: String, val alt: String, val aspect: Float?)
 data class LinkCard(val uri: String, val title: String, val description: String, val thumb: String?)
 
+data class MediaSource(val url: String, val mimeType: String, val bitrate: Long = 0)
+data class PlayableMedia(val sources: List<MediaSource>, val thumbnail: String?, val alt: String, val aspect: Float?, val audio: Boolean = false, val loop: Boolean = false) {
+    fun source(metered: Boolean, dataSaver: Boolean): MediaSource? {
+        sources.firstOrNull { it.mimeType.contains("mpegurl", ignoreCase = true) }?.let { return it }
+        val cap = if (dataSaver) 768_000L else if (metered) 2_500_000L else Long.MAX_VALUE
+        return sources.filter { it.bitrate <= cap }.maxByOrNull { it.bitrate } ?: sources.minByOrNull { it.bitrate }
+    }
+}
+
 data class Post(
     val uri: String,
     val cid: String,
@@ -72,7 +81,10 @@ data class Post(
     val labels: List<String> = emptyList(),
     /** Hashtags, from the text and the post's extra tags; muted words check these. */
     val tags: List<String> = emptyList(),
-)
+    val media: List<PlayableMedia> = emptyList(),
+) {
+    val hasMedia get() = images.isNotEmpty() || media.isNotEmpty() || card != null
+}
 
 data class Ref(val uri: String, val cid: String)
 
@@ -641,6 +653,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             likeCount = o.int("likeCount"),
             quoteCount = o.int("quoteCount"),
             images = images(embed),
+            media = MediaParsing.bluesky(embed),
             card = card(embed),
             quote = quote(embed),
             myLike = o["viewer"].obj.str("like"),
@@ -694,7 +707,10 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             text = value.str("text").orEmpty(), facets = parseFacets(value["facets"]),
             createdAt = value.str("createdAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
             replyCount = 0, repostCount = 0, likeCount = 0,
-            images = images((rec["embeds"] as? JsonArray)?.firstOrNull()?.obj), card = null, quote = null,
+            images = images((rec["embeds"] as? JsonArray)?.firstOrNull()?.obj),
+            media = MediaParsing.bluesky((rec["embeds"] as? JsonArray)?.firstOrNull()?.obj),
+            card = card((rec["embeds"] as? JsonArray)?.firstOrNull()?.obj), quote = null,
+            labels = labelsOf(rec),
             myLike = null, myRepost = null, replyRoot = null,
         )
     }

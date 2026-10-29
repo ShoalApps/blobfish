@@ -226,8 +226,6 @@ fun PostCard(
     big: Boolean = false,
     /** Pinned to the top of a profile: says so above the post, with a pin. */
     pinned: Boolean = false,
-    /** In threads a hidden post leaves a note, so the conversation still makes sense. */
-    noteWhenHidden: Boolean = false,
     /** Bluesky's thread line, joining this post's avatar to the post above and/or below. */
     lineAbove: Boolean = false,
     lineBelow: Boolean = false,
@@ -236,18 +234,7 @@ fun PostCard(
     val signedIn = Graph.store.session.collectAsState().value != null
     val decision = remember(post, prefs, signedIn) { Moderation.decide(post, prefs, signedIn) }
     var revealed by remember(post.uri) { mutableStateOf(false) }
-    if (decision is Moderation.Decision.Hide && !revealed) {
-        if (noteWhenHidden) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.VisibilityOff, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(decision.reason, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp).weight(1f))
-                // Your own choices can be undone here; moderators' and blocks can't.
-                if (decision.reason == "Post hidden by you" || decision.reason.startsWith("Muted word")) TextButton(onClick = { revealed = true }) { Text("Show") }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
-        }
-        return
-    }
+    if (decision is Moderation.Decision.Hide) return
     val covered = decision is Moderation.Decision.Warn && !revealed
     val blurMedia = decision is Moderation.Decision.BlurMedia && !revealed
     val lineColor = MaterialTheme.colorScheme.outlineVariant
@@ -304,10 +291,10 @@ fun PostCard(
                     Spacer(Modifier.height(4.dp))
                     RichTextView(post.text, post.facets, nav)
                 }
-                if (blurMedia && (post.images.isNotEmpty() || post.card != null)) {
+                if (blurMedia && (post.hasMedia)) {
                     ContentCover((decision as Moderation.Decision.BlurMedia).reason, Modifier.padding(top = 10.dp), media = true) { revealed = true }
                 } else {
-                    if (post.images.isNotEmpty()) Images(post, Modifier.padding(top = 10.dp))
+                    PostMedia(post, Modifier.padding(top = 10.dp))
                     post.card?.let { LinkCardView(it, Modifier.padding(top = 10.dp)) }
                 }
                 post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 10.dp)) }
@@ -360,6 +347,7 @@ fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
     val signedIn = Graph.store.session.collectAsState().value != null
     val decision = remember(post, prefs, signedIn) { Moderation.decide(post, prefs, signedIn) }
     var revealed by remember(post.uri) { mutableStateOf(false) }
+    if (decision is Moderation.Decision.Hide) return
     Column(
         Modifier.fillMaxWidth()
             .drawBehind { if (lineAbove) drawRect(lineColor, Offset(36.dp.toPx() - 1.dp.toPx(), 0f), Size(2.dp.toPx(), 10.dp.toPx())) }
@@ -375,10 +363,6 @@ fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
                 Text("@${post.author.handle}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
-        if (decision is Moderation.Decision.Hide && !revealed) {
-            ContentCover(decision.reason, Modifier.padding(top = 12.dp)) { revealed = true }
-            return@Column
-        }
         if (decision is Moderation.Decision.Warn && !revealed) {
             ContentCover(decision.reason, Modifier.padding(top = 12.dp)) { revealed = true }
         } else {
@@ -387,10 +371,10 @@ fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
                     RichTextView(post.text, post.facets, nav, large = true)
                 }
             }
-            if (decision is Moderation.Decision.BlurMedia && !revealed && (post.images.isNotEmpty() || post.card != null)) {
+            if (decision is Moderation.Decision.BlurMedia && !revealed && (post.hasMedia)) {
                 ContentCover(decision.reason, Modifier.padding(top = 12.dp), media = true) { revealed = true }
             } else {
-                if (post.images.isNotEmpty()) Images(post, Modifier.padding(top = 12.dp))
+                PostMedia(post, Modifier.padding(top = 12.dp))
                 post.card?.let { LinkCardView(it, Modifier.padding(top = 12.dp)) }
             }
             post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 12.dp)) }
@@ -429,15 +413,7 @@ fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
     val prefs by Graph.store.moderation.collectAsState()
     val signedIn = Graph.store.session.collectAsState().value != null
     val quoteDecision = remember(q, prefs, signedIn) { Moderation.decide(q, prefs, signedIn) }
-    if (quoteDecision is Moderation.Decision.Hide) {
-        Text(
-            "Quoted post hidden: ${quoteDecision.reason}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)).padding(12.dp),
-        )
-        return
-    }
+    if (quoteDecision is Moderation.Decision.Hide) return
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color.Transparent,
@@ -452,13 +428,26 @@ fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.height(4.dp))
             if (quoteDecision is Moderation.Decision.Warn) Text("Content warning: ${quoteDecision.reason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            else RichTextView(q.text, q.facets, nav, maxLines = 6)
+            else {
+                RichTextView(q.text, q.facets, nav, maxLines = 6)
+                if (quoteDecision is Moderation.Decision.BlurMedia) Text("Media hidden by content warning", style = MaterialTheme.typography.bodyMedium)
+                else {
+                    PostMedia(q, Modifier.padding(top = 8.dp))
+                    q.card?.let { LinkCardView(it, Modifier.padding(top = 8.dp)) }
+                }
+            }
         }
     }
 }
 
 private fun fullDate(at: java.time.Instant): String =
     java.time.format.DateTimeFormatter.ofPattern("h:mm a · d MMM yyyy").withZone(java.time.ZoneId.systemDefault()).format(at)
+
+@Composable
+private fun PostMedia(post: Post, modifier: Modifier) {
+    if (post.images.isNotEmpty()) Images(post, modifier)
+    post.media.forEach { media -> PlayableMediaCard(media, if (post.uri.startsWith("x:")) "https://x.com/i/status/${post.uri.removePrefix("x:")}" else webUrl(post), modifier) }
+}
 
 @Composable
 private fun Images(post: Post, modifier: Modifier) {
@@ -515,7 +504,7 @@ private fun LinkCardView(card: io.github.shoalapps.blobfish.data.LinkCard, modif
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { openLink(context, card.uri) },
+        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { openOriginalMedia(context, card.uri) },
     ) {
         Column {
             card.thumb?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(1.91f)) }
@@ -624,7 +613,7 @@ private fun ContentCover(reason: String, modifier: Modifier = Modifier, media: B
             Icon(Icons.Rounded.Info, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                 Text(reason, style = MaterialTheme.typography.titleSmall)
-                if (media) Text("The pictures are hidden", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (media) Text("The media is hidden", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = onShow) { Text("Show") }
         }
