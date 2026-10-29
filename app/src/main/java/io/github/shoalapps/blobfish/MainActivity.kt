@@ -33,7 +33,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.Icon
+import io.github.shoalapps.blobfish.LocalisedIcon as Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -44,7 +44,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import io.github.shoalapps.blobfish.LocalisedText as Text
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailItem
 import androidx.compose.runtime.Composable
@@ -107,6 +107,7 @@ private fun TabIcon(t: Tab, selected: Boolean) {
 }
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(base: android.content.Context) { super.attachBaseContext(io.github.shoalapps.blobfish.AppLanguage.wrap(base)) }
     private val link = mutableStateOf<Uri?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,7 +119,7 @@ class MainActivity : ComponentActivity() {
         Graph.checkForUpdate()
         setContent {
             val settings by Graph.store.settings.collectAsState()
-            SocialTheme(settings) { Root(link.value) { link.value = null } }
+            SocialTheme(settings) { WhatsNew.Host(); Root(link.value) { link.value = null } }
         }
     }
 

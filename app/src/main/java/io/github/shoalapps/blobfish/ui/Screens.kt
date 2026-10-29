@@ -47,7 +47,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
+import io.github.shoalapps.blobfish.LocalisedIcon as Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
@@ -64,7 +64,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
+import io.github.shoalapps.blobfish.LocalisedText as Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -232,7 +232,7 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
                 )
                 if (feeds.size > 1) {
                     androidx.compose.material3.PrimaryScrollableTabRow(selectedTabIndex = tab.coerceIn(0, feeds.lastIndex), edgePadding = 12.dp) {
-                        feeds.forEachIndexed { i, f -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(f.name, maxLines = 1) }) }
+                        feeds.forEachIndexed { i, f -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(f.name, localise = false, maxLines = 1) }) }
                     }
                 }
             }
@@ -338,7 +338,7 @@ fun PersonRow(a: Author, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(a.avatar, 44.dp)
         Column(Modifier.padding(start = 12.dp)) {
-            Text(a.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(a.name, localise = false, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text("@${a.handle}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -512,7 +512,7 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
         }
         Column(Modifier.padding(horizontal = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(p.author.name, style = MaterialTheme.typography.headlineSmallEmphasized, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
+                Text(p.author.name, localise = false, style = MaterialTheme.typography.headlineSmallEmphasized, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
                 VerifiedBadge(p.author, 22.dp)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -946,6 +946,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                     row { sh -> Link("Sign in to Bluesky", "Post, reply, like and see your timeline", sh, onSignIn) }
                 }
             }
+            item(key = "app-language") { io.github.shoalapps.blobfish.AppLanguage.SettingsRow() }
             group("Appearance") {
                 row { sh ->
                     Surface(shape = sh.shape, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
@@ -990,6 +991,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 row { sh -> Link("Check for updates now", "Version $version · opens Shoal", sh) { io.github.shoalapps.blobfish.ShoalManager.checkForUpdates(context) } }
             }
             group("About") {
+                row { sh -> Link("What's new", "Changes in this version", sh) { io.github.shoalapps.blobfish.WhatsNew.open() } }
                 if (io.github.shoalapps.blobfish.Telemetry.available) row { sh -> Toggle("Send error reports", "Anonymous crash and error reports help fix bugs. Never your accounts or history.", io.github.shoalapps.blobfish.Telemetry.enabled, sh) { v -> io.github.shoalapps.blobfish.Telemetry.setEnabled(context, v) } }
                 row { sh -> Link("Privacy policy", "What Blobfish sends, and to whom", sh) { openLink(context, "https://shoalapps.github.io/privacy.html") } }
                 row { sh -> Link("Legal", "Licences, trademarks and notices", sh) { openLink(context, "https://shoalapps.github.io/legal.html") } }

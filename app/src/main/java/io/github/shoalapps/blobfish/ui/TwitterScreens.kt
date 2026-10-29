@@ -22,7 +22,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SwitchAccount
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
+import io.github.shoalapps.blobfish.LocalisedIcon as Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -31,7 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
+import io.github.shoalapps.blobfish.LocalisedText as Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -120,7 +120,7 @@ private fun TwitterHome(nav: Nav, onSwitch: () -> Unit) {
         topBar = {
             Column(Modifier.statusBarsPadding()) {
                 TopAppBar(
-                    title = { Text(XBrand.name) },
+                    title = { Text(XBrand.name, localise = false) },
                     actions = { IconButton(onClick = onSwitch) { Icon(Icons.Rounded.SwitchAccount, "Switch account") } },
                     windowInsets = WindowInsets(0),
                 )
