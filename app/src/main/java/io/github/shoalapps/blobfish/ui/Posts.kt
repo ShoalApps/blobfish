@@ -504,7 +504,7 @@ private fun LinkCardView(card: io.github.shoalapps.blobfish.data.LinkCard, modif
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { openLink(context, card.uri) },
+        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { openOriginalMedia(context, card.uri) },
     ) {
         Column {
             card.thumb?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(1.91f)) }

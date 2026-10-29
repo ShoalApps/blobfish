@@ -93,7 +93,7 @@ private fun MediaDialog(media: PlayableMedia, originalUrl: String, close: () -> 
                 Text("This stream could not be played. Try again or open the original post.", color = Color.White, modifier = Modifier.padding(16.dp))
                 TextButton(onClick = { error = false; player.prepare(); player.play() }) { Text("Try again") }
             }
-            TextButton(onClick = { player.pause(); openLink(context, originalUrl) }) { Text("Open original post") }
+            TextButton(onClick = { player.pause(); openOriginalMedia(context, originalUrl) }) { Text("Open original post") }
         }
     }
 }
