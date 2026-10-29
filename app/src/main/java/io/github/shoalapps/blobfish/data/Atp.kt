@@ -1,11 +1,13 @@
 package io.github.shoalapps.blobfish.data
 
+import io.github.shoalapps.blobfish.Graph
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -150,8 +152,19 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         body: JsonObject? = null,
         auth: Boolean = session != null,
         retried: Boolean = false,
+        sendQueued: Boolean = false,
     ): JsonObject = withContext(Dispatchers.IO) {
+        if (method == "POST" && !sendQueued && nsid in setOf("app.bsky.actor.putPreferences",
+            "app.bsky.graph.muteActor", "app.bsky.graph.unmuteActor", "com.atproto.repo.putRecord")) {
+            Graph.offline.enqueue(nsid, body ?: JsonObject(emptyMap()))
+            return@withContext JsonObject(emptyMap())
+        }
+        val namespace = (Graph.offline.owner() ?: "public") + "|" + store.settings.value.appView
+        val cacheKey = nsid + params.toSortedMap().toString()
+        if (method == "GET" && !Graph.offline.available()) return@withContext Graph.offline.cached(cacheKey, namespace)
         val s = if (auth) session else null
+        if (body?.get("repo") != null && body["repo"]?.jsonPrimitive?.content != s?.did)
+            throw AtpException(401, "This saved action belongs to a different account")
         val host = s?.pds ?: if (method == "GET") publicHost else store.settings.value.server
         val url = "$host/xrpc/$nsid".toHttpUrl().newBuilder().apply {
             // A value holding several values (joined with MANY) becomes the parameter repeated.
@@ -176,18 +189,19 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
                 BskyOAuth.remember(url.toString(), resp)
                 val challenge = resp.header("WWW-Authenticate").orEmpty()
                 // The PDS wants a fresh nonce: try again with it.
-                if (resp.code == 401 && challenge.contains("use_dpop_nonce") && !retried) return@withContext call(method, nsid, params, body, auth, retried = true)
+                if (resp.code == 401 && challenge.contains("use_dpop_nonce") && !retried) return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued)
                 // The access token ran out: refresh it and try again.
                 if (resp.code == 401 && (challenge.contains("invalid_token") || obj.str("error") == "invalid_token") && !retried) {
                     refreshSession()
-                    return@withContext call(method, nsid, params, body, auth, retried = true)
+                    return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued)
                 }
             }
             if (resp.code == 400 && obj.str("error") == "ExpiredToken" && s != null && !retried) {
                 refreshSession()
-                return@withContext call(method, nsid, params, body, auth, retried = true)
+                return@withContext call(method, nsid, params, body, auth, retried = true, sendQueued = sendQueued)
             }
             if (!resp.isSuccessful) throw AtpException(resp.code, obj.str("message") ?: obj.str("error") ?: "Bluesky said ${resp.code}")
+            if (method == "GET") Graph.offline.remember(cacheKey, obj, namespace)
             obj
         }
     }
@@ -443,21 +457,28 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     // ---- Writing ----
 
+    internal suspend fun sendSaved(write: SavedWrite) {
+        if (Graph.offline.owner() != write.owner) throw AtpException(401, "Different account")
+        call("POST", write.endpoint, body = write.body, sendQueued = true)
+    }
+
     private fun requireSession() = session ?: throw AtpException(401, "Sign in to do that")
 
     private suspend fun createRecord(collection: String, record: JsonObject): String {
         val s = requireSession()
-        return call("POST", "com.atproto.repo.createRecord", body = buildJsonObject {
-            put("repo", s.did)
-            put("collection", collection)
-            put("record", record)
-        }).str("uri")!!
+        val key = RecordKeys.next()
+        val body = buildJsonObject {
+            put("repo", s.did); put("collection", collection); put("rkey", key); put("record", record)
+        }
+        Graph.offline.enqueue("com.atproto.repo.putRecord", body)
+        return "at://"+s.did+"/"+collection+"/"+key
     }
 
     private suspend fun deleteRecord(uri: String) {
         val s = requireSession()
         val (collection, rkey) = uri.removePrefix("at://").split("/").let { it[1] to it[2] }
-        call("POST", "com.atproto.repo.deleteRecord", body = buildJsonObject {
+        require(uri.startsWith("at://"+s.did+"/")) { "This action belongs to another account" }
+        Graph.offline.enqueue("com.atproto.repo.deleteRecord", buildJsonObject {
             put("repo", s.did); put("collection", collection); put("rkey", rkey)
         })
     }
@@ -602,12 +623,12 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             muted = viewer?.get("muted")?.let { (it as? JsonPrimitive)?.content == "true" } == true,
             blocking = viewer.str("blocking") != null,
             blockedBy = viewer?.get("blockedBy")?.let { (it as? JsonPrimitive)?.content == "true" } == true,
-            following = viewer.str("following") != null,
+            following = Graph.offline.recordState("app.bsky.graph.follow", did, viewer.str("following")) != null,
             verified = o["verification"].obj.str("verifiedStatus") == "valid",
             verifier = o["verification"].obj.str("trustedVerifierStatus") == "valid",
             pronouns = o.str("pronouns")?.takeIf { it.isNotBlank() },
             followedBy = viewer.str("followedBy") != null,
-            followUri = viewer.str("following"),
+            followUri = Graph.offline.recordState("app.bsky.graph.follow", did, viewer.str("following")),
             description = o.str("description")?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
@@ -625,7 +646,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         followers = o.int("followersCount"),
         follows = o.int("followsCount"),
         posts = o.int("postsCount"),
-        myFollow = o["viewer"].obj.str("following"),
+        myFollow = Graph.offline.recordState("app.bsky.graph.follow", o.str("did").orEmpty(), o["viewer"].obj.str("following")),
         links = (o["links"] as? JsonArray).orEmpty().mapNotNull { e ->
             val l = e.obj ?: return@mapNotNull null
             ProfileLink(l.str("url") ?: return@mapNotNull null, l.str("title")?.takeIf { it.isNotBlank() }, l.str("icon"))
@@ -656,8 +677,8 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             media = MediaParsing.bluesky(embed),
             card = card(embed),
             quote = quote(embed),
-            myLike = o["viewer"].obj.str("like"),
-            myRepost = o["viewer"].obj.str("repost"),
+            myLike = Graph.offline.recordState("app.bsky.feed.like", o.str("uri").orEmpty(), o["viewer"].obj.str("like")),
+            myRepost = Graph.offline.recordState("app.bsky.feed.repost", o.str("uri").orEmpty(), o["viewer"].obj.str("repost")),
             replyRoot = record["reply"].obj?.get("root").obj?.let { r -> Ref(r.str("uri") ?: return@let null, r.str("cid") ?: return@let null) },
             labels = labelsOf(o),
             tags = parseFacets(record["facets"]).filter { it.kind == RichText.Facet.Kind.TAG }.map { it.value } +

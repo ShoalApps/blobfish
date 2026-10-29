@@ -178,12 +178,15 @@ fun <T> PagedList(
     empty: String = "Nothing here yet",
     row: @Composable (T) -> Unit,
 ) {
+    val online by Graph.offline.online.collectAsState()
+    LaunchedEffect(online) { if (online) vm.refresh() }
     val state = rememberLazyListState()
     val nearEnd by remember { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.layoutInfo.totalItemsCount - 6 } }
     LaunchedEffect(nearEnd) { if (nearEnd) vm.loadMore() }
     PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh() }, modifier = modifier.fillMaxSize()) {
         // A readable column on wide screens, like Bluesky's web app.
         LazyColumn(Modifier.fillMaxSize().wrapContentWidth().widthIn(max = 680.dp), state = state, contentPadding = PaddingValues(bottom = 96.dp)) {
+            item { OfflineStatus() }
             header()
             when {
                 vm.loading -> item { CenterLoading() }
@@ -946,6 +949,10 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 } else {
                     row { sh -> Link("Sign in to Bluesky", "Post, reply, like and see your timeline", sh, onSignIn) }
                 }
+            }
+            item { OfflineStatus() }
+            group("Offline") {
+                row { sh -> Toggle("Offline mode", "Use saved Bluesky views; account actions wait to sync", s.offlineMode, sh) { v -> store.updateSettings { it.copy(offlineMode = v) } } }
             }
             item(key = "app-language") { io.github.shoalapps.blobfish.AppLanguage.SettingsRow() }
             group("Appearance") {
