@@ -1,5 +1,9 @@
 [
   {
+    "title": "Bluesky, even offline",
+    "body": "Previously opened Bluesky views are saved privately for offline browsing. Likes, reposts, follows, posts, replies and preference changes wait on your phone and sync to the same account after reconnection. Fixed record keys prevent duplicate posts when a response is lost. Settings shows saved actions and an offline switch. Twitter still requires a connection; cached views do not download videos."
+  },
+  {
     "title": "Posts with something to play",
     "body": "Play Bluesky videos and available Twitter video, GIF and audio streams, including media in quoted posts."
   },

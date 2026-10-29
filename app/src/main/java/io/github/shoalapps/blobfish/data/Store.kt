@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 data class Settings(
     /** 0 = follow the phone, 1 = light, 2 = dark */
     val theme: Int = 0,
+    val offlineMode: Boolean = false,
     val dynamicColor: Boolean = true,
     /** Render markdown-style formatting (code blocks, bold, italic) the way mu does. */
     val richFormatting: Boolean = true,
@@ -53,11 +54,13 @@ class Store(context: Context) {
 
     fun updateSettings(change: (Settings) -> Settings) {
         _settings.update(change)
+        io.github.shoalapps.blobfish.Graph.offline.changed()
         prefs.edit().putString("settings", json.encodeToString(Settings.serializer(), _settings.value)).apply()
     }
 
     fun setSession(s: Session?) {
         _session.value = s
+        io.github.shoalapps.blobfish.Graph.offline.changed()
         if (s == null) { prefs.edit().remove("session").apply(); setModeration(Moderation.Prefs()) }
         else prefs.edit().putString("session", json.encodeToString(SavedSession.serializer(), SavedSession(s.did, s.handle, s.access, s.refresh, s.pds, s.oauth, s.tokenUrl))).apply()
     }

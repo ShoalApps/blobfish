@@ -31,12 +31,18 @@ class SocialApp : Application(), SingletonImageLoader.Factory {
         Telemetry.init(this)
         DataMover.run(this)
         Graph.app = this
+        Graph.offline.init()
         Graph.syncModeration()
         Graph.syncProfile()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
+            .components { add(coil3.intercept.Interceptor { chain ->
+                val request = if (!Graph.offline.available() || !Graph.offline.allowed())
+                    chain.request.newBuilder().networkCachePolicy(coil3.request.CachePolicy.DISABLED).build() else chain.request
+                chain.withRequest(request).proceed()
+            }) }
             .crossfade(180)
             .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.25).build() }
             .diskCache { DiskCache.Builder().directory(context.cacheDir.resolve("images").toOkioPath()).maxSizeBytes(256L * 1024 * 1024).build() }
@@ -54,6 +60,7 @@ object Graph {
             .build()
     }
     val store by lazy { Store(app) }
+    val offline by lazy { io.github.shoalapps.blobfish.data.OfflineStore(app) }
     val atp by lazy { Atp(http, store) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -88,7 +95,7 @@ object Graph {
 
     /** Fetches your account's moderation preferences (on start and after signing in). */
     fun syncModeration() {
-        if (store.session.value == null) return
+        if (store.session.value == null || !offline.available()) return
         scope.launch { runCatching { atp.moderationPrefs() }.onSuccess(store::setModeration) }
     }
 
