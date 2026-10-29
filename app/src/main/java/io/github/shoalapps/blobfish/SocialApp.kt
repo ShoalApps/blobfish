@@ -38,6 +38,11 @@ class SocialApp : Application(), SingletonImageLoader.Factory {
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
+            .components { add(coil3.intercept.Interceptor { chain ->
+                val request = if (!Graph.offline.available() || !Graph.offline.allowed())
+                    chain.request.newBuilder().networkCachePolicy(coil3.request.CachePolicy.DISABLED).build() else chain.request
+                chain.withRequest(request).proceed()
+            }) }
             .crossfade(180)
             .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.25).build() }
             .diskCache { DiskCache.Builder().directory(context.cacheDir.resolve("images").toOkioPath()).maxSizeBytes(256L * 1024 * 1024).build() }
