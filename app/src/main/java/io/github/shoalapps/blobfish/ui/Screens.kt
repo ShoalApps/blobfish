@@ -283,6 +283,8 @@ class SearchVm : ViewModel() {
     var people by mutableStateOf<List<Author>>(emptyList()); private set
     var loading by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
+    var peopleError by mutableStateOf<String?>(null); private set
+    var searched by mutableStateOf(false); private set
 
     private var searchJob: kotlinx.coroutines.Job? = null
 
@@ -290,10 +292,12 @@ class SearchVm : ViewModel() {
         if (q.isBlank()) return
         query = q
         searchJob?.cancel()
-        loading = true; error = null; posts = emptyList(); people = emptyList()
+        loading = true; searched = true; error = null; peopleError = null; posts = emptyList(); people = emptyList()
         searchJob = viewModelScope.launch {
             val peopleResult = async {
-                try { Graph.atp.searchPeople(q) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+                try { Result.success(Graph.atp.searchPeople(q)) }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { Result.failure(e) }
             }
             try {
                 val result = Graph.atp.searchPosts(q).items
@@ -305,7 +309,9 @@ class SearchVm : ViewModel() {
                 kotlin.coroutines.coroutineContext.ensureActive()
                 error = if (Graph.store.session.value == null) "Sign in to search posts. People search works signed out." else friendly(e)
             }
-            people = peopleResult.await()
+            val result = peopleResult.await()
+            kotlin.coroutines.coroutineContext.ensureActive()
+            result.onSuccess { people = it }.onFailure { peopleError = friendly(it) }
             loading = false
         }
     }
@@ -345,6 +351,9 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             when {
                 vm.loading -> item { CenterLoading() }
                 tab == 0 && vm.error != null -> item { Message(vm.error!!) }
+                tab == 1 && vm.peopleError != null -> item { Message(vm.peopleError!!) }
+                vm.searched && tab == 0 && vm.posts.isEmpty() -> item { Message("No posts found. Try another search.") }
+                vm.searched && tab == 1 && vm.people.isEmpty() -> item { Message("No people found. Try another search.") }
                 tab == 0 -> items(vm.posts) { PostCard(it, nav) }
                 else -> items(vm.people) { a -> PersonRow(a) { nav.profile(a.did) } }
             }
