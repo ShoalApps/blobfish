@@ -1,0 +1,6 @@
+{
+  "name": "Blobfish",
+  "description": "Bluesky and Twitter in a Material You Android app.",
+  "icon": "app/src/main/res/drawable/ic_launcher_foreground.xml",
+  "colours": "app/src/main/res/values/icon_colors.xml"
+}
