@@ -120,6 +120,8 @@ import io.github.shoalapps.blobfish.data.ThreadNode
 import io.github.shoalapps.blobfish.data.compact
 import io.github.shoalapps.blobfish.data.shortAgo
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
 fun friendly(e: Throwable): String = when (e) {
@@ -282,15 +284,28 @@ class SearchVm : ViewModel() {
     var loading by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun search(q: String = query) {
         if (q.isBlank()) return
         query = q
-        loading = true; error = null
-        viewModelScope.launch {
-            launch { people = runCatching { Graph.atp.searchPeople(q) }.getOrDefault(emptyList()) }
-            runCatching { Graph.atp.searchPosts(q).items }
-                .onSuccess { posts = it }
-                .onFailure { error = if (Graph.store.session.value == null) "Sign in to search posts. People search works signed out." else friendly(it) }
+        searchJob?.cancel()
+        loading = true; error = null; posts = emptyList(); people = emptyList()
+        searchJob = viewModelScope.launch {
+            val peopleResult = async {
+                try { Graph.atp.searchPeople(q) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+            }
+            try {
+                val result = Graph.atp.searchPosts(q).items
+                kotlin.coroutines.coroutineContext.ensureActive()
+                posts = result
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                kotlin.coroutines.coroutineContext.ensureActive()
+                error = if (Graph.store.session.value == null) "Sign in to search posts. People search works signed out." else friendly(e)
+            }
+            people = peopleResult.await()
             loading = false
         }
     }
