@@ -68,9 +68,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
-    implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.webkit:webkit:1.18.0")
     // Bluesky's sign-in page in a browser tab.
-    implementation("androidx.browser:browser:1.8.0")
+    implementation("androidx.browser:browser:1.10.0")
     // Error reports, only with consent (MIT). See Telemetry.kt.
     implementation("io.sentry:sentry-android:8.59.0")
     // Home-screen widgets (Material You colours via Glance).
