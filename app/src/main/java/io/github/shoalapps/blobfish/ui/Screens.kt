@@ -90,7 +90,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
@@ -269,10 +268,8 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
 fun Wordmark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val shape = remember { PolygonShape(MaterialShapes.Cookie12Sided) }
-        val wings by androidx.compose.animation.core.rememberInfiniteTransition(label = "swim").animateFloat(1f, .84f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(700), androidx.compose.animation.core.RepeatMode.Reverse), label = "swim")
         Box(Modifier.size(30.dp).clip(shape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-            // The fish beats its wings.
-            Icon(androidx.compose.ui.res.painterResource(io.github.shoalapps.blobfish.R.drawable.ic_launcher_mono), null, Modifier.requiredSize(50.dp).graphicsLayer { scaleX = wings }, tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(androidx.compose.ui.res.painterResource(io.github.shoalapps.blobfish.R.drawable.ic_launcher_mono), null, Modifier.requiredSize(50.dp), tint = MaterialTheme.colorScheme.onPrimary)
         }
         Text("Butterflyfish", style = MaterialTheme.typography.titleLargeEmphasized, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = 8.dp))
     }
