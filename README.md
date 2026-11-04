@@ -1,4 +1,6 @@
-<p align="center"><a href="https://shoalapps.github.io/"><img src="https://raw.githubusercontent.com/ShoalApps/shoalapps.github.io/main/assets/readme/blobfish.svg" alt="Blobfish - a Shoal app, with the rest of the Shoal family" width="100%"></a></p>
+<p align="center"><a href="https://shoalapps.github.io/"><img src="https://raw.githubusercontent.com/ShoalApps/shoalapps.github.io/main/assets/readme/butterflyfish.svg" alt="Butterflyfish - a Shoal app, with the rest of the Shoal family" width="100%"></a></p>
+
+*Formerly Blobfish.*
 
 A Material You client for Bluesky, part of [Shoal](https://shoalapps.github.io): open-source Android apps
 that take on your wallpaper's colours.
@@ -13,8 +15,8 @@ that take on your wallpaper's colours.
 
 ## Getting the APK
 
-Every push to `main` builds a signed release. Install `Blobfish.apk` from the newest
-[release](https://github.com/ShoalApps/blobfish/releases/latest).
+Every push to `main` builds a signed release. Install `Butterflyfish.apk` from the newest
+[release](https://github.com/ShoalApps/butterflyfish/releases/latest).
 
 ## Privacy
 
@@ -25,7 +27,7 @@ asks GitHub whether there's a newer version. Your session is stored only on your
 
 Free software under the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE).
 
-Blobfish is not affiliated with, endorsed by or sponsored by Bluesky Social PBC.
+Butterflyfish is not affiliated with, endorsed by or sponsored by Bluesky Social PBC.
 
 ## Privacy and legal
 

@@ -56,7 +56,7 @@ object Graph {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", "Blobfish/0.1 (Android)").build()) }
+            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", "Butterflyfish/0.1 (Android)").build()) }
             .build()
     }
     val store by lazy { Store(app) }

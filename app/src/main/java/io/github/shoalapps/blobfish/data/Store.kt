@@ -20,9 +20,9 @@ data class Settings(
     val autoUpdate: Boolean = true,
     /** Your X account in the account switcher (x.com, signed in on X's own login). */
     val showX: Boolean = true,
-    /** Which account Blobfish is showing: "bluesky" or "x". */
+    /** Which account Butterflyfish is showing: "bluesky" or "x". */
     val service: String = "bluesky",
-    /** Call X "Twitter", with the bird, everywhere in Blobfish. On unless you turn it off. */
+    /** Call X "Twitter", with the bird, everywhere in Butterflyfish. On unless you turn it off. */
     val twitterNames: Boolean = true,
     /** Your hosting provider (PDS or entryway) for signing in without a handle. Bluesky's by default. */
     val server: String = DEFAULT_SERVER,

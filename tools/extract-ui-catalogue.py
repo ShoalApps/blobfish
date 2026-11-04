@@ -3,7 +3,7 @@ import re,json,xml.etree.ElementTree as ET
 repo_root=Path(__file__).resolve().parents[1]
 base=repo_root.parent
 repos=[repo_root.name]
-brands=set('Shoal Swordfish Clownfish Blobfish Pufferfish Anglerfish YouTube TikTok Reddit Bluesky SponsorBlock DeArrow Liberapay Shizuku Shevery X TV HD SD 4K APK OAuth GitHub Sentry MaterialKolor NewPipeExtractor'.split())
+brands=set('Shoal Angelfish Clownfish Butterflyfish Pufferfish Anglerfish YouTube TikTok Reddit Bluesky SponsorBlock DeArrow Liberapay Shizuku Shevery X TV HD SD 4K APK OAuth GitHub Sentry MaterialKolor NewPipeExtractor'.split())
 def literals(s):
     i=0
     while i<len(s):

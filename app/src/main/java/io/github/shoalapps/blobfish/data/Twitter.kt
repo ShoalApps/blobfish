@@ -10,8 +10,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Reads Twitter's own data (as its website receives it) into Blobfish's posts and people, so
- * Twitter shows in Blobfish's layout. Posts get "x:<id>" URIs and people "x:<id>" DIDs, so the rest
+ * Reads Twitter's own data (as its website receives it) into Butterflyfish's posts and people, so
+ * Twitter shows in Butterflyfish's layout. Posts get "x:<id>" URIs and people "x:<id>" DIDs, so the rest
  * of the app can tell them from Bluesky's.
  */
 object TwitterParse {
@@ -189,7 +189,7 @@ object TwitterParse {
 
     /**
      * Twitter's text with its short links swapped for where they go, the media link dropped, and
-     * links, mentions and hashtags as Blobfish's facets (UTF-8 byte ranges, like Bluesky's).
+     * links, mentions and hashtags as Butterflyfish's facets (UTF-8 byte ranges, like Bluesky's).
      */
     internal fun textAndFacets(raw: String, entities: JsonObject?, extended: JsonObject?): Pair<String, List<RichText.Facet>> {
         var text = unescape(raw)

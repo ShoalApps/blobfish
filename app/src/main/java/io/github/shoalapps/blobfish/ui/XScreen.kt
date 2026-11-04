@@ -71,7 +71,7 @@ object XView {
             override fun onPageFinished(view: WebView, url: String?) { CookieManager.getInstance().flush() }
         }
         webChromeClient = WebChromeClient()
-        // Hands the website's own data to Blobfish (see XBridge).
+        // Hands the website's own data to Butterflyfish (see XBridge).
         addJavascriptInterface(XBridge.Receiver(), "BlobfishX")
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
             androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, XBridge.CAPTURE_SCRIPT, setOf("https://x.com"))
@@ -94,7 +94,7 @@ object XView {
     }
 
     /**
-     * Runs on every x.com page; does nothing unless "Call it Twitter" is on (Blobfish sets
+     * Runs on every x.com page; does nothing unless "Call it Twitter" is on (Butterflyfish sets
      * window.__blobfishTwitter before the page loads). Swaps X's logo for the bird and "X" in the
      * page title for "Twitter".
      */

@@ -36,11 +36,16 @@ jobs:
         run: ./gradlew assembleRelease testDebugUnitTest --stacktrace
 
       - name: Publish release
-        run: cp app/build/outputs/apk/release/app-release.apk Blobfish.apk
+        # Blobfish.apk is the same file, for copies of Shoal and this app from before the rename.
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Butterflyfish.apk
+          cp Butterflyfish.apk Blobfish.apk
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: build-${{ github.run_number }}
-          name: Blobfish build ${{ github.run_number }}
-          body: Install Blobfish.apk below. Blobfish is free software under the GPL-3.0 and is not affiliated with Bluesky Social PBC.
-          files: Blobfish.apk
+          name: Butterflyfish build ${{ github.run_number }}
+          body: Install Butterflyfish.apk below. Butterflyfish is free software under the GPL-3.0 and is not affiliated with Bluesky Social PBC.
+          files: |
+            Butterflyfish.apk
+            Blobfish.apk
           make_latest: true

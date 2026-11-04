@@ -55,7 +55,7 @@ import io.github.shoalapps.blobfish.data.TwitterParse
 import kotlinx.coroutines.launch
 
 /**
- * Your Twitter account in Blobfish's own layout: Home ("For you" and "Following"), Search and
+ * Your Twitter account in Butterflyfish's own layout: Home ("For you" and "Following"), Search and
  * You, with posts and profiles opening in the same screens as Bluesky's.
  */
 @OptIn(ExperimentalMaterial3Api::class)

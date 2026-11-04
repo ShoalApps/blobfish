@@ -50,7 +50,7 @@ class FeedTest {
             // Where each one really is, not clipped to the screen (clipping squashes off-screen items together).
             // Only items wholly on screen count: the list keeps partly scrolled-away items around at stale positions.
             // Anything under the top bar is a post scrolled past, left at a stale position: skip it.
-            val barBottom = compose.onAllNodesWithText("Blobfish").fetchSemanticsNodes().maxOfOrNull { it.boundsInRoot.bottom } ?: 0f
+            val barBottom = compose.onAllNodesWithText("Butterflyfish").fetchSemanticsNodes().maxOfOrNull { it.boundsInRoot.bottom } ?: 0f
             fun rects(tag: String) = nodes(tag).fetchSemanticsNodes()
                 .filter { it.boundsInRoot.height.toInt() == it.size.height && it.positionInRoot.y >= barBottom }
                 .map { androidx.compose.ui.geometry.Rect(it.positionInRoot, androidx.compose.ui.geometry.Size(it.size.width.toFloat(), it.size.height.toFloat())) }

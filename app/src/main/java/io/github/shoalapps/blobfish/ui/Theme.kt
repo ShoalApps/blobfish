@@ -20,7 +20,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import io.github.shoalapps.blobfish.data.Settings
 
-// Fallback palette: Blobfish's colour, generated with Material's colour utilities.
+// Fallback palette: Butterflyfish's colour, generated with Material's colour utilities.
 // Used on Android 11 and below, or with dynamic colour turned off.
 private val Light = lightColorScheme(
     primary = Color(0xFF005DB7), onPrimary = Color(0xFFFFFFFF),

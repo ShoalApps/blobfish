@@ -18,7 +18,7 @@ android {
         targetSdk = 36
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
-        resValue("string", "app_name", "Blobfish")
+        resValue("string", "app_name", "Butterflyfish")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -43,7 +43,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "Blobfish Dev")
+            resValue("string", "app_name", "Butterflyfish Dev")
         }
     }
 

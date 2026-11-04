@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Blobfish"
+rootProject.name = "Butterflyfish"
 include(":app")

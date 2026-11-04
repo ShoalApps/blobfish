@@ -143,7 +143,7 @@ private fun NavHostController.goTab(route: String) = navigate(route) {
 @Composable
 private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
     val navController = rememberNavController()
-    // Somewhere to go once Blobfish's own screens are showing (they aren't while on your X account).
+    // Somewhere to go once Butterflyfish's own screens are showing (they aren't while on your X account).
     var pendingRoute by remember { mutableStateOf<String?>(null) }
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
@@ -261,7 +261,7 @@ private fun UpdatePrompt(modifier: Modifier) {
     val message = Graph.Update.message
     LaunchedEffect(available) {
         if (available == null) return@LaunchedEffect
-        val r = host.showSnackbar("A new version of Blobfish is ready", actionLabel = "Update", withDismissAction = true, duration = SnackbarDuration.Indefinite)
+        val r = host.showSnackbar("A new version of Butterflyfish is ready", actionLabel = "Update", withDismissAction = true, duration = SnackbarDuration.Indefinite)
         if (r == SnackbarResult.ActionPerformed) Graph.installUpdate() else Graph.Update.available = null
     }
     LaunchedEffect(message) {

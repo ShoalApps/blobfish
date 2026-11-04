@@ -20,8 +20,8 @@ import kotlinx.serialization.json.JsonObject
 
 /**
  * Twitter, read the way its website reads it. A hidden copy of the website (signed in with your
- * account, in [XView]) is steered to the page Blobfish needs; the data the website's own code then
- * receives is handed to Blobfish, which shows it in its own layout. Nothing is requested that the
+ * account, in [XView]) is steered to the page Butterflyfish needs; the data the website's own code then
+ * receives is handed to Butterflyfish, which shows it in its own layout. Nothing is requested that the
  * website itself wouldn't request, so it keeps working however Twitter signs its requests.
  */
 @OptIn(DelicateCoroutinesApi::class)
@@ -38,7 +38,7 @@ object XBridge {
         latest[op]?.takeIf { System.currentTimeMillis() - (latestAt[op] ?: 0) < maxAgeMs }
     }
 
-    /** Runs before the website's own scripts: passes each data response on to Blobfish. */
+    /** Runs before the website's own scripts: passes each data response on to Butterflyfish. */
     const val CAPTURE_SCRIPT = """
         (function () {
           if (window.__blobfishCapture) return; window.__blobfishCapture = true;

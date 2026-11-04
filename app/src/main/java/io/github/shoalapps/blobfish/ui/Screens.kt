@@ -90,6 +90,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
@@ -263,15 +264,17 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
     }
 }
 
-/** "Blobfish" with the blobfish on the app's cookie mark. */
+/** "Butterflyfish" with the blobfish on the app's cookie mark. */
 @Composable
 fun Wordmark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val shape = remember { PolygonShape(MaterialShapes.Cookie12Sided) }
+        val wings by androidx.compose.animation.core.rememberInfiniteTransition(label = "swim").animateFloat(1f, .84f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(700), androidx.compose.animation.core.RepeatMode.Reverse), label = "swim")
         Box(Modifier.size(30.dp).clip(shape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-            Icon(androidx.compose.ui.res.painterResource(io.github.shoalapps.blobfish.R.drawable.ic_launcher_mono), null, Modifier.requiredSize(50.dp), tint = MaterialTheme.colorScheme.onPrimary)
+            // The fish beats its wings.
+            Icon(androidx.compose.ui.res.painterResource(io.github.shoalapps.blobfish.R.drawable.ic_launcher_mono), null, Modifier.requiredSize(50.dp).graphicsLayer { scaleX = wings }, tint = MaterialTheme.colorScheme.onPrimary)
         }
-        Text("Blobfish", style = MaterialTheme.typography.titleLargeEmphasized, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = 8.dp))
+        Text("Butterflyfish", style = MaterialTheme.typography.titleLargeEmphasized, fontWeight = FontWeight.Black, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -739,7 +742,7 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
             }
             Text("Sign in with Bluesky", style = MaterialTheme.typography.headlineSmallEmphasized, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
             Text(
-                "You'll sign in on Bluesky's own page, with your usual password and two-factor. Blobfish never sees your password.",
+                "You'll sign in on Bluesky's own page, with your usual password and two-factor. Butterflyfish never sees your password.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
             )
@@ -1025,9 +1028,9 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
             group("About") {
                 row { sh -> Link("What's new", "Changes in this version", sh) { io.github.shoalapps.blobfish.WhatsNew.open() } }
                 if (io.github.shoalapps.blobfish.Telemetry.available) row { sh -> Toggle("Send error reports", "Anonymous crash and error reports help fix bugs. Never your accounts or history.", io.github.shoalapps.blobfish.Telemetry.enabled, sh) { v -> io.github.shoalapps.blobfish.Telemetry.setEnabled(context, v) } }
-                row { sh -> Link("Privacy policy", "What Blobfish sends, and to whom", sh) { openLink(context, "https://shoalapps.github.io/privacy.html") } }
+                row { sh -> Link("Privacy policy", "What Butterflyfish sends, and to whom", sh) { openLink(context, "https://shoalapps.github.io/privacy.html") } }
                 row { sh -> Link("Legal", "Licences, trademarks and notices", sh) { openLink(context, "https://shoalapps.github.io/legal.html") } }
-                row { sh -> Link("Source code", "github.com/ShoalApps/blobfish", sh) { openLink(context, "https://github.com/ShoalApps/blobfish") } }
+                row { sh -> Link("Source code", "github.com/ShoalApps/butterflyfish", sh) { openLink(context, "https://github.com/ShoalApps/butterflyfish") } }
                 row { sh -> Link("Shoal", "shoalapps.github.io: all the apps and their credits", sh) { openLink(context, "https://shoalapps.github.io") } }
                 row { sh ->
                     Link("GNU GPL v3 or later", "Free software. Not affiliated with or endorsed by Bluesky Social PBC.", sh) {

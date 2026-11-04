@@ -48,7 +48,7 @@ class BlobfishWidget : GlanceAppWidget() {
         val main = io.github.shoalapps.blobfish.MainActivity::class.java
         provideContent {
             GlanceTheme {
-                QuickWidget("Blobfish", actionStartActivity(Intent(context, io.github.shoalapps.blobfish.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)),
+                QuickWidget("Butterflyfish", actionStartActivity(Intent(context, io.github.shoalapps.blobfish.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)),
                         Triple(R.drawable.ic_w_edit, "Post", open(context, "blobfish://compose", main)),
                         Triple(R.drawable.ic_w_bell, "Notifications", open(context, "blobfish://notifications", main)),
                         Triple(R.drawable.ic_w_search, "Search", open(context, "blobfish://search", main)),

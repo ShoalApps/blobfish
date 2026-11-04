@@ -85,7 +85,7 @@ fun AccountAvatar(avatar: String?, bluesky: Boolean, size: Dp, modifier: Modifie
 }
 
 /**
- * Your accounts, to switch between: Bluesky (shown in Blobfish's own layout) and X (its website,
+ * Your accounts, to switch between: Bluesky (shown in Butterflyfish's own layout) and X (its website,
  * signed in on X's own page). Each shows its service's logo.
  */
 @Composable
@@ -162,7 +162,7 @@ private fun SwitchRow(title: String, body: String, checked: Boolean, onChange: (
 }
 
 /**
- * Blobfish on your Twitter account: Twitter in Blobfish's own layout (home, search, your profile,
+ * Butterflyfish on your Twitter account: Twitter in Butterflyfish's own layout (home, search, your profile,
  * posts and profiles in the same screens as Bluesky's), read from its website kept hidden behind.
  * Until you've signed in, the website's sign-in page shows instead.
  */
