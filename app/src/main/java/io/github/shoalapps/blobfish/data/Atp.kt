@@ -447,8 +447,8 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         return ThreadNode(post, replies)
     }
 
-    suspend fun searchPosts(q: String, cursor: String? = null): Page<Post> {
-        val o = call("GET", "app.bsky.feed.searchPosts", mapOf("q" to q, "limit" to "30", "cursor" to cursor))
+    suspend fun searchPosts(q: String, cursor: String? = null, latest: Boolean = false): Page<Post> {
+        val o = call("GET", "app.bsky.feed.searchPosts", mapOf("q" to q, "limit" to "30", "cursor" to cursor, "sort" to if (latest) "latest" else "top"))
         return Page((o["posts"] as? JsonArray).orEmpty().mapNotNull { it.obj?.let(::parsePost) }, o.str("cursor"))
     }
 

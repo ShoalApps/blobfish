@@ -345,38 +345,84 @@ class SearchVm : ViewModel() {
     var peopleError by mutableStateOf<String?>(null); private set
     var searched by mutableStateOf(false); private set
 
-    private var searchJob: kotlinx.coroutines.Job? = null
+    var latest by mutableStateOf(false); private set
+    var postCursor by mutableStateOf<String?>(null); private set
+    var loadingMore by mutableStateOf(false); private set
+    var pageError by mutableStateOf<String?>(null); private set
+    private var submittedQuery = ""
+    private var peopleJob: kotlinx.coroutines.Job? = null
+    private var postsJob: kotlinx.coroutines.Job? = null
 
     fun search(q: String = query) {
-        if (q.isBlank()) return
+        val submitted = q.trim()
+        if (submitted.isEmpty()) return
         query = q
-        searchJob?.cancel()
-        loading = true; peopleLoading = true; searched = true; error = null; peopleError = null; posts = emptyList(); people = emptyList()
-        searchJob = viewModelScope.launch {
-            launch {
-                try {
-                    val result = Graph.atp.searchPeople(q)
-                    ensureActive()
-                    people = result
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    ensureActive()
-                    peopleError = friendly(e)
-                }
-                peopleLoading = false
-            }
+        submittedQuery = submitted
+        searched = true
+        refreshPosts()
+        peopleJob?.cancel()
+        peopleLoading = true
+        peopleError = null
+        people = emptyList()
+        peopleJob = viewModelScope.launch {
             try {
-                val result = Graph.atp.searchPosts(q).items
-                kotlin.coroutines.coroutineContext.ensureActive()
-                posts = result
+                val result = Graph.atp.searchPeople(submitted)
+                ensureActive()
+                people = result
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                kotlin.coroutines.coroutineContext.ensureActive()
-                error = if (Graph.store.session.value == null) "Sign in to search posts. People search works signed out." else friendly(e)
+                ensureActive()
+                peopleError = friendly(e)
+            }
+            peopleLoading = false
+        }
+    }
+
+    fun sortPosts(showLatest: Boolean) {
+        if (latest == showLatest) return
+        latest = showLatest
+        if (searched) refreshPosts()
+    }
+
+    fun refreshPosts() {
+        postsJob?.cancel()
+        posts = emptyList()
+        postCursor = null
+        error = null
+        loadingMore = false
+        loading = true
+        requestPosts(null)
+    }
+
+    fun loadMorePosts() {
+        val cursor = postCursor ?: return
+        if (loading || loadingMore) return
+        loadingMore = true
+        requestPosts(cursor)
+    }
+
+    private fun requestPosts(cursor: String?) {
+        val submitted = submittedQuery
+        val showLatest = latest
+        pageError = null
+        postsJob = viewModelScope.launch {
+            try {
+                val page = Graph.atp.searchPosts(submitted, cursor, showLatest)
+                ensureActive()
+                posts = (posts + page.items).distinctBy { it.uri }
+                postCursor = page.cursor?.takeUnless { it == cursor }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ensureActive()
+                if (cursor != null) pageError = friendly(e)
+                else error = if (e is AtpException && e.status == 401 && Graph.store.session.value == null) {
+                    "Sign in to search posts. People search works signed out."
+                } else friendly(e)
             }
             loading = false
+            loadingMore = false
         }
     }
 }
@@ -412,14 +458,27 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
         },
     ) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
+            if (tab == 0 && vm.searched) item {
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.FilterChip(selected = !vm.latest, onClick = { vm.sortPosts(false) }, label = { Text("Top") })
+                    androidx.compose.material3.FilterChip(selected = vm.latest, onClick = { vm.sortPosts(true) }, label = { Text("Latest") })
+                }
+            }
             when {
                 (if (tab == 0) vm.loading else vm.peopleLoading) -> item { CenterLoading() }
-                tab == 0 && vm.error != null -> item { Message(vm.error!!) }
+                tab == 0 && vm.error != null -> item { Message(vm.error!!, "Try again", vm::refreshPosts) }
                 tab == 1 && vm.peopleError != null -> item { Message(vm.peopleError!!) }
                 vm.searched && tab == 0 && vm.posts.isEmpty() -> item { Message("No posts found. Try another search.") }
                 vm.searched && tab == 1 && vm.people.isEmpty() -> item { Message("No people found. Try another search.") }
-                tab == 0 -> items(vm.posts) { PostCard(it, nav) }
+                tab == 0 -> items(vm.posts, key = { it.uri }) { PostCard(it, nav) }
                 else -> items(vm.people) { a -> PersonRow(a) { nav.profile(a.did) } }
+            }
+            if (tab == 0 && vm.postCursor != null) item {
+                when {
+                    vm.loadingMore -> CenterLoading()
+                    vm.pageError != null -> Message(vm.pageError!!, "Try again", vm::loadMorePosts)
+                    else -> TextButton(onClick = vm::loadMorePosts) { Text("Load more") }
+                }
             }
         }
     }
