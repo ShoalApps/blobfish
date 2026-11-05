@@ -63,6 +63,10 @@ private fun AccountDrafts(owner: String?, nav: Nav, onBack: () -> Unit) {
                             replyTo = null
                             selectedId = draft.id
                             composing = true
+                        } else if (draft.replyTarget?.parent != null) {
+                            replyTo = draft.replyTarget.toPost()
+                            selectedId = draft.id
+                            composing = true
                         } else {
                             opening = true
                             scope.launch {
@@ -100,5 +104,5 @@ private fun AccountDrafts(owner: String?, nav: Nav, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { discard(draft) }) { Text("Discard draft") } },
         )
     }
-    if (composing) Composer(replyTo, nav, draftId = selectedId) { composing = false; replyTo = null }
+    if (composing) Composer(replyTo, nav, draftId = selectedId, refreshReply = true) { composing = false; replyTo = null }
 }

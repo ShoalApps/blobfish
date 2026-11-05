@@ -133,6 +133,19 @@ class DraftsScreenTest {
         rule.onNode(hasSetTextAction()).assertDoesNotExist()
     }
 
+    @Test fun aReplyDraftOpensFromWhatWasSavedWithoutFetchingTheParent() {
+        val uri = "at://did:example:gone/app.bsky.feed.post/nothing"
+        val parent = io.github.shoalapps.blobfish.data.DraftParent(uri, "did:example:gone", "someone.example", "Some One", "The original words")
+        Graph.drafts.save(owner, Draft("My reply", uri, replyTarget = io.github.shoalapps.blobfish.data.DraftReply("cid", parent = parent)))
+        rule.setContent { DraftsScreen(nav) {} }
+        rule.waitUntilAtLeastOneExists(hasText("My reply"), 5000)
+        rule.onNodeWithText("My reply").performClick()
+        // The post can't be fetched, as it doesn't exist, yet the composer opens with who it replies to.
+        rule.waitUntilAtLeastOneExists(hasText("Reply to Some One"), 5000)
+        rule.onNodeWithText("Couldn't fetch the original post").assertDoesNotExist()
+        Graph.drafts.discard(owner, uri)
+    }
+
     @Test fun deletingRemovesIt() {
         Graph.drafts.save(owner, Graph.drafts.newStandalone().copy(text = "Going away"))
         rule.setContent { DraftsScreen(nav) {} }

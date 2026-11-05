@@ -834,9 +834,10 @@ private class ComposerDraft(private val owner: String, replyTo: Post?, selectedI
     }
     val error = restored.exceptionOrNull()
     var value by mutableStateOf((restored.getOrNull() ?: if (replyTo == null) Graph.drafts.newStandalone() else Draft(replyTo = replyTo.uri)).let { draft ->
-        draft.copy(replyTarget = draft.replyTarget ?: replyTo?.let {
-            io.github.shoalapps.blobfish.data.DraftReply(it.cid, it.replyRoot?.uri, it.replyRoot?.cid)
-        })
+        draft.copy(replyTarget = replyTo?.let {
+            (draft.replyTarget ?: io.github.shoalapps.blobfish.data.DraftReply(it.cid, it.replyRoot?.uri, it.replyRoot?.cid))
+                .copy(parent = io.github.shoalapps.blobfish.data.DraftParent.from(it))
+        } ?: draft.replyTarget)
     })
     private var finished = false
     fun save() { if (!finished && error == null) Graph.drafts.save(owner, value) }
@@ -853,7 +854,7 @@ private class ComposerDraft(private val owner: String, replyTo: Post?, selectedI
 
 /** New post or reply, with a live preview of the formatting. */
 @Composable
-fun Composer(replyTo: Post?, nav: Nav, draftId: String? = null, onDismiss: () -> Unit) {
+fun Composer(replyTo: Post?, nav: Nav, draftId: String? = null, refreshReply: Boolean = false, onDismiss: () -> Unit) {
     val session by Graph.store.session.collectAsState()
     val owner = session?.let { it.did + "|" + it.pds }
     val openedBy = remember { owner }
@@ -862,19 +863,39 @@ fun Composer(replyTo: Post?, nav: Nav, draftId: String? = null, onDismiss: () ->
         return
     }
     androidx.compose.runtime.key(owner, replyTo?.uri, draftId) {
-        DraftComposer(owner, replyTo, nav, draftId, onDismiss)
+        DraftComposer(owner, replyTo, nav, draftId, refreshReply, onDismiss)
     }
 }
 
 @Composable
-private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: String?, onDismiss: () -> Unit) {
+private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: String?, refreshReply: Boolean, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val draft = remember { ComposerDraft(owner ?: "bluesky|signed-out", replyTo, draftId) }
+    var parent by remember { mutableStateOf(replyTo) }
+    var parentUnavailable by remember { mutableStateOf(false) }
+    var postError by remember { mutableStateOf<String?>(null) }
+    val online by Graph.offline.online.collectAsState()
+    LaunchedEffect(refreshReply, online) {
+        if (refreshReply && replyTo != null && Graph.offline.available()) {
+            try {
+                val fresh = Graph.atp.thread(replyTo.uri).focus.post
+                if (Graph.offline.owner() == owner) {
+                    parent = fresh
+                    parentUnavailable = false
+                    draft.value = draft.value.copy(replyTarget = draft.value.replyTarget?.copy(
+                        parent = io.github.shoalapps.blobfish.data.DraftParent.from(fresh)))
+                }
+            } catch (e: CancellationException) { throw e
+            } catch (e: AtpException) {
+                if (e.status == 404) parentUnavailable = true
+            } catch (_: Exception) { /* Keep the saved parent when refresh fails. */ }
+        }
+    }
     val text = draft.value.text
     val pictures = draft.value.pictures
     // Keep the saved strong references even when reopened from a freshly fetched post.
-    val target = replyTo?.let { post ->
+    val target = parent?.let { post ->
         draft.value.replyTarget?.let { saved ->
             post.copy(cid = saved.cid, replyRoot = saved.rootUri?.let {
                 io.github.shoalapps.blobfish.data.Ref(it, saved.rootCid ?: error("Missing thread root"))
@@ -931,16 +952,29 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: Str
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp).imePadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(enabled = !busy, onClick = dismiss) { Icon(Icons.Rounded.Close, "Close") }
-                Text(if (replyTo != null) "Reply to ${replyTo.author.name}" else "New post", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(if (replyTo != null) "Reply to ${parent?.author?.name ?: replyTo.author.name}" else "New post", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Text("${limit - count}", color = if (count > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
                     enabled = !busy && draft.error == null && owner != null && (text.isNotBlank() || pictures.isNotEmpty()) && count <= limit,
                     onClick = {
                         busy = true
+                        postError = null
                         scope.launch {
                             runCatching {
                                 draft.save()
                                 check(Graph.offline.owner() == owner) { "Your account changed. Reopen this draft to post it." }
+                                if (target != null) {
+                                    check(Graph.offline.available() || !parentUnavailable) {
+                                        "The post you're replying to was deleted or is no longer available. Your draft is still saved."
+                                    }
+                                    if (Graph.offline.available()) {
+                                        try { Graph.atp.thread(target.uri) }
+                                        catch (e: AtpException) {
+                                            if (e.status == 404) error("The post you're replying to was deleted or is no longer available. Your draft is still saved.")
+                                            throw e
+                                        }
+                                    }
+                                }
                                 val images = pictures.map { (uri, alt) ->
                                     val (blob, w, h) = uploadImage(context, android.net.Uri.parse(uri), 2000)
                                     io.github.shoalapps.blobfish.data.Atp.Attachment(blob, alt, w, h)
@@ -953,7 +987,7 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: Str
                                     toast(context, "Saved to send. Check saved actions for sync status.")
                                     onDismiss()
                                 }
-                                .onFailure { toast(context, friendly(it)) }
+                                .onFailure { postError = friendly(it) }
                             busy = false
                         }
                     },
@@ -966,6 +1000,7 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: Str
                 placeholder = { Text("What's up? Use ``` for code, **bold**, *italic*") },
                 minLines = 4,
             )
+            postError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
             if (pictures.isNotEmpty()) {
                 Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     pictures.forEachIndexed { i, (uri, alt) ->

@@ -25,10 +25,36 @@ data class DraftPicture(val uri: String, val alt: String = "")
 
 /** Strong references for the parent and the thread root, which may be different posts. */
 @Serializable
-data class DraftReply(val cid: String, val rootUri: String? = null, val rootCid: String? = null) {
+data class DraftReply(val cid: String, val rootUri: String? = null, val rootCid: String? = null,
+    val parent: DraftParent? = null) {
     init {
         require(cid.isNotBlank())
         require((rootUri == null) == (rootCid == null))
+        require(rootUri == null || rootUri.isNotBlank())
+        require(rootCid == null || rootCid.isNotBlank())
+    }
+
+    /** Only display data comes from the snapshot; the saved strong references stay authoritative. */
+    fun toPost(): Post? = parent?.let {
+        Post(it.uri, cid, Author(it.authorDid, it.authorHandle, it.authorName, null), it.text,
+            emptyList(), null, 0, 0, 0, images = emptyList(), card = null, quote = null,
+            myLike = null, myRepost = null, replyRoot = rootUri?.let { uri -> Ref(uri, requireNotNull(rootCid)) })
+    }
+}
+
+/** Small, self-contained copy of what the reply composer needs to reopen offline. */
+@Serializable
+data class DraftParent(val uri: String, val authorDid: String, val authorHandle: String,
+    val authorName: String?, val text: String) {
+    init {
+        require(uri.isNotBlank())
+        require(authorDid.isNotBlank())
+        require(authorHandle.isNotBlank())
+    }
+
+    companion object {
+        fun from(post: Post) = DraftParent(post.uri, post.author.did, post.author.handle,
+            post.author.displayName, post.text)
     }
 }
 
@@ -37,7 +63,11 @@ const val LEGACY_DRAFT_ID = "legacy"
 
 @Serializable
 data class Draft(val text: String = "", val replyTo: String? = null, val pictures: List<DraftPicture> = emptyList(),
-    val replyTarget: DraftReply? = null, val id: String = LEGACY_DRAFT_ID)
+    val replyTarget: DraftReply? = null, val id: String = LEGACY_DRAFT_ID) {
+    init {
+        require(replyTarget?.parent == null || replyTarget.parent.uri == replyTo)
+    }
+}
 
 data class SavedDraft(val draft: Draft, val savedAt: Long)
 

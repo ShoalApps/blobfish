@@ -25,6 +25,73 @@ class DraftsTest {
         assertArrayEquals(byteArrayOf(1, 2, 3), file(picture).readBytes())
     }
 
+    @Test fun savedParentRebuildsTheComposerAndKeepsTheThreadReferences() {
+        val parent = DraftParent("at://did:parent/app.bsky.feed.post/one", "did:parent",
+            "fish.example", "Little fish", "Original 🐟\npost")
+        val reply = DraftReply("parent-cid", "at://did:root/app.bsky.feed.post/root", "root-cid", parent)
+        val draft = Draft("My reply", parent.uri, replyTarget = reply)
+        store().save("a", draft)
+        val restored = store().load("a", parent.uri)!!
+        assertEquals(draft, restored)
+        assertEquals(draft, store().list("a").single().draft)
+        val post = restored.replyTarget!!.toPost()!!
+        assertEquals(parent.uri, post.uri)
+        assertEquals("parent-cid", post.cid)
+        assertEquals(parent.authorDid, post.author.did)
+        assertEquals(parent.authorHandle, post.author.handle)
+        assertEquals(parent.authorName, post.author.name)
+        assertEquals(parent.text, post.text)
+        assertEquals(Ref(reply.rootUri!!, reply.rootCid!!), post.replyRoot)
+        assertEquals(parent, DraftParent.from(post))
+    }
+
+    @Test fun savedTopLevelParentUsesItsOwnReferenceAndFallsBackToTheHandle() {
+        val parent = DraftParent("at://parent", "did:parent", "fish.example", null, "")
+        val reply = DraftReply("parent-cid", parent = parent)
+        store().save("a", Draft("Reply", parent.uri, replyTarget = reply))
+        val post = store().load("a", parent.uri)!!.replyTarget!!.toPost()!!
+        assertEquals("fish.example", post.author.name)
+        assertEquals("", post.text)
+        assertNull(post.replyRoot)
+        assertEquals(Ref(parent.uri, "parent-cid"), post.replyRoot ?: Ref(post.uri, post.cid))
+    }
+
+    @Test fun olderReplyFilesWithAndWithoutStrongReferencesStillLoad() {
+        val draft = Draft("Old reply", "at://parent")
+        store().save("a", draft)
+        val file = directory.walkTopDown().first { it.name == "draft.json" }
+        val old = """{"text":"Old reply","replyTo":"at://parent","replyTarget":{"cid":"parent-cid","rootUri":"at://root","rootCid":"root-cid"}}"""
+        file.writeText(old)
+        val restored = store().load("a", draft.replyTo)!!
+        assertEquals(DraftReply("parent-cid", "at://root", "root-cid"), restored.replyTarget)
+        assertNull(restored.replyTarget!!.toPost())
+        assertEquals(restored, store().list("a").single().draft)
+        assertEquals(old, file.readText())
+        file.writeText("""{"text":"Old reply","replyTo":"at://parent"}""")
+        assertEquals(draft, store().load("a", draft.replyTo))
+        assertNull(store().list("a").single().draft.replyTarget)
+    }
+
+    @Test fun corruptParentFilesAreSkippedAndCannotBeOverwritten() {
+        store().save("a", Draft("Good"))
+        store().save("a", Draft("Reply", "at://parent"))
+        val file = directory.walkTopDown().first { it.name == "draft.json" && it.readText().contains("Reply") }
+        val badParents = listOf(
+            """{"uri":"at://parent","authorDid":"did:a","authorHandle":"a","authorName":null}""", // missing text
+            """{"uri":"at://parent","authorDid":"did:a","authorHandle":[],"authorName":null,"text":"Hi"}""",
+            """{"uri":"at://parent","authorDid":"did:a","authorHandle":"","authorName":null,"text":"Hi"}""",
+            """{"uri":"at://different","authorDid":"did:a","authorHandle":"a","authorName":null,"text":"Hi"}""",
+        )
+        badParents.forEach { parent ->
+            val broken = """{"text":"Reply","replyTo":"at://parent","replyTarget":{"cid":"cid","parent":$parent}}"""
+            file.writeText(broken)
+            assertThrows(Exception::class.java) { store().load("a", "at://parent") }
+            assertThrows(Exception::class.java) { store().save("a", Draft("Replacement", "at://parent")) }
+            assertEquals(listOf("Good"), store().list("a").map { it.draft.text })
+            assertEquals(broken, file.readText())
+        }
+    }
+
     @Test fun accountsAndReplyTargetsHaveSeparateDrafts() {
         val drafts = store()
         val entries = listOf("a" to Draft("New"), "a" to Draft("Reply", "target"),
