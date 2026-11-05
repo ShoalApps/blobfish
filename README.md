@@ -48,6 +48,8 @@ The apps follow Android's system language by default, with an App language picke
 
 ## Staying up to date
 
+The [feature parity tracker](compat/FEATURES.md) records current coverage and the work ahead for Bluesky and X.
+
 Settings → **Staying up to date** shows the bundled Bluesky schema date and source commit,
 partial feature coverage, features still to add, and local counts of unrecognised type names.
 Unknown Bluesky embeds, feed reasons and facets keep the readable post and offer **Open on

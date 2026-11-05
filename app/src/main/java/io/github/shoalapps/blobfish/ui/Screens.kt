@@ -123,7 +123,6 @@ import io.github.shoalapps.blobfish.data.ThreadNode
 import io.github.shoalapps.blobfish.data.compact
 import io.github.shoalapps.blobfish.data.shortAgo
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import io.github.shoalapps.blobfish.AppLanguage
@@ -144,35 +143,58 @@ class PagedVm<T>(private val load: suspend (String?) -> Page<T>) : ViewModel() {
     var loading by mutableStateOf(true); private set
     var refreshing by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
-    /** More pages are waiting to be loaded. */
-    var hasMore by mutableStateOf(true); private set
+    var hasMore by mutableStateOf(false); private set
     var loadingMore by mutableStateOf(false); private set
+    var pageError by mutableStateOf<String?>(null); private set
     private var cursor: String? = null
-    private var more = true
-        set(v) { field = v; hasMore = v }
-    private var busy = false
-        set(v) { field = v; loadingMore = v }
+    private var request: kotlinx.coroutines.Job? = null
 
-    init { refresh(first = true) }
+    init { refresh() }
 
-    fun refresh(first: Boolean = false) {
-        if (!first) refreshing = true
+    fun refresh() {
+        if (refreshing) return
+        request?.cancel()
+        refreshing = !loading
+        loadingMore = false
         error = null
-        viewModelScope.launch {
+        pageError = null
+        request = viewModelScope.launch {
             try {
-                val p = load(null)
-                items = p.items; cursor = p.cursor; more = p.cursor != null
-            } catch (e: CancellationException) { throw e } catch (e: Exception) { error = friendly(e) }
-            loading = false; refreshing = false
+                val page = load(null)
+                ensureActive()
+                items = page.items
+                cursor = page.cursor
+                hasMore = cursor != null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ensureActive()
+                error = friendly(e)
+            }
+            loading = false
+            refreshing = false
         }
     }
 
     fun loadMore() {
-        if (busy || !more || loading) return
-        busy = true
-        viewModelScope.launch {
-            runCatching { load(cursor) }.onSuccess { p -> items = items + p.items; cursor = p.cursor; more = p.cursor != null }
-            busy = false
+        val next = cursor ?: return
+        if (loadingMore || loading || refreshing) return
+        loadingMore = true
+        pageError = null
+        request = viewModelScope.launch {
+            try {
+                val page = load(next)
+                ensureActive()
+                items = items + page.items
+                cursor = page.cursor?.takeUnless { it == next }
+                hasMore = cursor != null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ensureActive()
+                pageError = friendly(e)
+            }
+            loadingMore = false
         }
     }
 }
@@ -186,10 +208,16 @@ fun <T> PagedList(
     row: @Composable (T) -> Unit,
 ) {
     val online by Graph.offline.online.collectAsState()
-    LaunchedEffect(online) { if (online) vm.refresh() }
+    var wasOffline by remember(vm) { mutableStateOf(false) }
+    LaunchedEffect(vm, online) {
+        if (online && wasOffline) vm.refresh()
+        wasOffline = !online
+    }
     val state = rememberLazyListState()
     val nearEnd by remember { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= state.layoutInfo.totalItemsCount - 6 } }
-    LaunchedEffect(nearEnd) { if (nearEnd) vm.loadMore() }
+    LaunchedEffect(vm, nearEnd, vm.hasMore, vm.items.size, online) {
+        if (online && nearEnd && vm.hasMore && vm.pageError == null) vm.loadMore()
+    }
     PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh() }, modifier = modifier.fillMaxSize()) {
         // A readable column on wide screens, like Bluesky's web app.
         LazyColumn(Modifier.fillMaxSize().wrapContentWidth().widthIn(max = 680.dp), state = state, contentPadding = PaddingValues(bottom = 96.dp)) {
@@ -199,7 +227,14 @@ fun <T> PagedList(
                 vm.loading -> item { CenterLoading() }
                 vm.error != null && vm.items.isEmpty() -> item { Message(vm.error!!, "Try again") { vm.refresh() } }
                 vm.items.isEmpty() -> item { Message(empty) }
-                else -> items(vm.items) { row(it) }
+                else -> {
+                    vm.error?.let { error -> item { Message(error, "Try again") { vm.refresh() } } }
+                    items(vm.items) { row(it) }
+                    when {
+                        vm.loadingMore -> item { CenterLoading() }
+                        vm.pageError != null -> item { Message(vm.pageError!!, "Try again") { vm.loadMore() } }
+                    }
+                }
             }
         }
     }
@@ -305,6 +340,7 @@ class SearchVm : ViewModel() {
     var posts by mutableStateOf<List<Post>>(emptyList()); private set
     var people by mutableStateOf<List<Author>>(emptyList()); private set
     var loading by mutableStateOf(false); private set
+    var peopleLoading by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
     var peopleError by mutableStateOf<String?>(null); private set
     var searched by mutableStateOf(false); private set
@@ -315,12 +351,20 @@ class SearchVm : ViewModel() {
         if (q.isBlank()) return
         query = q
         searchJob?.cancel()
-        loading = true; searched = true; error = null; peopleError = null; posts = emptyList(); people = emptyList()
+        loading = true; peopleLoading = true; searched = true; error = null; peopleError = null; posts = emptyList(); people = emptyList()
         searchJob = viewModelScope.launch {
-            val peopleResult = async {
-                try { Result.success(Graph.atp.searchPeople(q)) }
-                catch (e: CancellationException) { throw e }
-                catch (e: Exception) { Result.failure(e) }
+            launch {
+                try {
+                    val result = Graph.atp.searchPeople(q)
+                    ensureActive()
+                    people = result
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    ensureActive()
+                    peopleError = friendly(e)
+                }
+                peopleLoading = false
             }
             try {
                 val result = Graph.atp.searchPosts(q).items
@@ -332,9 +376,6 @@ class SearchVm : ViewModel() {
                 kotlin.coroutines.coroutineContext.ensureActive()
                 error = if (Graph.store.session.value == null) "Sign in to search posts. People search works signed out." else friendly(e)
             }
-            val result = peopleResult.await()
-            kotlin.coroutines.coroutineContext.ensureActive()
-            result.onSuccess { people = it }.onFailure { peopleError = friendly(it) }
             loading = false
         }
     }
@@ -372,7 +413,7 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
     ) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
             when {
-                vm.loading -> item { CenterLoading() }
+                (if (tab == 0) vm.loading else vm.peopleLoading) -> item { CenterLoading() }
                 tab == 0 && vm.error != null -> item { Message(vm.error!!) }
                 tab == 1 && vm.peopleError != null -> item { Message(vm.peopleError!!) }
                 vm.searched && tab == 0 && vm.posts.isEmpty() -> item { Message("No posts found. Try another search.") }
