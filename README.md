@@ -10,7 +10,7 @@ that take on your wallpaper's colours.
 - Talks to Bluesky directly over the AT Protocol; browse Discover, profiles and threads signed out
 - Unfinished posts stay as drafts, with their pictures, for each account and reply
 - Sign in with an app password for your timeline, notifications, likes, reposts, follows and posting
-- mu-style formatting: fenced code blocks with syntax highlighting, `inline code`, **bold**, *italic*
+- mu-style formatting: fenced code blocks with syntax highlighting and `inline code`
   and ~~strikethrough~~, alongside Bluesky's links, mentions and hashtags
 - Updates itself from GitHub releases (Android asks first)
 

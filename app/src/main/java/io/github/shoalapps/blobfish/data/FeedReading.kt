@@ -8,10 +8,15 @@ import kotlinx.serialization.json.Json
 data class FeedAnchor(val owner: String, val feed: String, val postId: String, val offset: Int, val savedAt: Long)
 
 /** Pure policy shared by storage, pagination and the Compose list. A repost has its post's identity. */
-class FeedReading<T>(private val key: (T) -> String) {
+class FeedReading<T>(
+    private val pinned: (T) -> Boolean = { false },
+    private val withoutPin: (T) -> T = { it },
+    private val key: (T) -> String,
+) {
     data class Merge<T>(val items: List<T>, val unseen: Set<String>)
 
-    fun unique(items: List<T>): List<T> = items.distinctBy(key)
+    // Stable ordering keeps a pin ahead of its ordinary occurrence, even across pages/cache reads.
+    fun unique(items: List<T>): List<T> = items.sortedByDescending(pinned).distinctBy(key)
 
     /** Preserve the old order, update overlapping rows, and prepend genuinely new rows in server order. */
     fun refresh(old: List<T>, incoming: List<T>, unseen: Set<String>, atTop: Boolean): Merge<T> {
@@ -19,7 +24,11 @@ class FeedReading<T>(private val key: (T) -> String) {
         val oldIds = old.map(key).toSet()
         val added = fresh.filter { key(it) !in oldIds }
         val updates = fresh.associateBy(key)
-        return Merge(added + unique(old).map { updates[key(it)] ?: it },
+        // A fresh head is authoritative about pins. Don't keep an old pin after it is changed
+        // or removed; pagination, by contrast, never clears pins (append below).
+        return Merge(unique(added + unique(old).map { previous ->
+            updates[key(previous)] ?: if (pinned(previous)) withoutPin(previous) else previous
+        }),
             if (atTop || old.isEmpty()) emptySet() else unseen + added.map(key))
     }
 
@@ -46,3 +55,9 @@ class FeedReading<T>(private val key: (T) -> String) {
 }
 
 val FeedItem.readingKey: String get() = post.uri
+
+/** X retains its existing ordering and deduplication policy. */
+fun readingFeedPolicy(): FeedReading<FeedItem> = FeedReading(
+    pinned = { it.pinned && !it.post.uri.startsWith("x:") },
+    withoutPin = { it.copy(pinned = false) }, key = { it.readingKey },
+)

@@ -28,7 +28,7 @@ class ReadingFeedVm(
     private val active: () -> Boolean,
     private val load: suspend (String?) -> Page<FeedItem>,
 ) : ViewModel() {
-    private val policy = FeedReading<FeedItem> { it.readingKey }
+    private val policy = readingFeedPolicy()
     var items by mutableStateOf<List<FeedItem>>(emptyList()); private set
     var loading by mutableStateOf(true); private set
     var refreshing by mutableStateOf(false); private set
@@ -153,7 +153,7 @@ fun ReadingFeedList(vm: ReadingFeedVm, modifier: Modifier = Modifier, empty: Str
     }
     // Construct the list at its cached anchor, so the first rendered frame is already positioned.
     key(vm) {
-        val policy = FeedReading<FeedItem> { it.readingKey }
+        val policy = readingFeedPolicy()
         val found = vm.anchor != null && policy.contains(vm.items, vm.anchor)
         val state = rememberLazyListState(
             initialFirstVisibleItemIndex = if (found) policy.index(vm.items, vm.anchor) + headerCount else 0,
@@ -184,7 +184,7 @@ fun ReadingFeedList(vm: ReadingFeedVm, modifier: Modifier = Modifier, empty: Str
         }
         LaunchedEffect(vm.restoreVersion) {
             if (vm.loading) return@LaunchedEffect
-            val policy = FeedReading<FeedItem> { it.readingKey }
+            val policy = readingFeedPolicy()
             val found = policy.contains(vm.items, vm.anchor)
             val target = if (found && vm.anchor != null) policy.index(vm.items, vm.anchor) + headerCount else 0
             state.scrollToItem(target, if (found) vm.anchor?.offset ?: 0 else 0)

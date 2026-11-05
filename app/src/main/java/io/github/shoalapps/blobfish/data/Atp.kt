@@ -66,6 +66,9 @@ data class PlayableMedia(val sources: List<MediaSource>, val thumbnail: String?,
 }
 
 @kotlinx.serialization.Serializable
+enum class QuoteAvailability { AVAILABLE, DELETED, BLOCKED, DETACHED }
+
+@kotlinx.serialization.Serializable
 data class Post(
     val uri: String,
     val cid: String,
@@ -91,6 +94,8 @@ data class Post(
     val tags: List<String> = emptyList(),
     val media: List<PlayableMedia> = emptyList(),
     val unsupportedTypes: List<String> = emptyList(),
+    /** Null means no quote (or a cache written before availability was recorded). */
+    val quoteAvailability: QuoteAvailability? = null,
 ) {
     val hasMedia get() = images.isNotEmpty() || media.isNotEmpty() || card != null
 }
@@ -419,7 +424,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     /** filter: posts_and_author_threads (Posts), posts_with_replies (Replies) or posts_with_media (Media). */
     suspend fun authorFeed(actor: String, cursor: String? = null, filter: String = "posts_and_author_threads"): Page<FeedItem> =
-        call("GET", "app.bsky.feed.getAuthorFeed", mapOf("actor" to actor, "limit" to "30", "filter" to filter, "cursor" to cursor)).let(::feedPage)
+        call("GET", "app.bsky.feed.getAuthorFeed", authorFeedParameters(actor, cursor, filter)).let(::feedPage)
 
     suspend fun profile(actor: String): Profile = parseProfile(call("GET", "app.bsky.actor.getProfile", mapOf("actor" to actor)))
 

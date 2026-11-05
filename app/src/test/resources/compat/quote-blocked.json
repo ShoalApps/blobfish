@@ -1,0 +1,24 @@
+{
+  "uri": "at://did:plc:test/app.bsky.feed.post/quote",
+  "cid": "cid",
+  "author": {
+    "did": "did:plc:test",
+    "handle": "test.example"
+  },
+  "record": {
+    "$type": "app.bsky.feed.post",
+    "text": "A post with a quote",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  "embed": {
+    "$type": "app.bsky.embed.record#view",
+    "record": {
+      "$type": "app.bsky.embed.record#viewBlocked",
+      "uri": "at://did:plc:other/app.bsky.feed.post/one",
+      "blocked": true,
+      "author": {
+        "did": "did:plc:other"
+      }
+    }
+  }
+}

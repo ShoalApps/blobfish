@@ -77,6 +77,38 @@ class FeedReadingTest {
         assertTrue(merged.unseen.isEmpty())
     }
 
+    @Test fun pinWinsOverOrdinaryOccurrencesInCachePagesAndRefreshAndStaysFirst() {
+        val feed = readingFeedPolicy()
+        val ordinary = item()
+        val pin = ordinary.copy(pinned = true)
+        val other = ordinary.copy(post = ordinary.post.copy(uri = "at://post/other"))
+        assertEquals(listOf(pin, other), feed.unique(listOf(other, ordinary, pin, ordinary)))
+        assertEquals(listOf(pin, other), feed.append(listOf(pin, other), listOf(ordinary)))
+        assertEquals(listOf(pin, other), feed.append(listOf(other, ordinary), listOf(pin)))
+        val fresh = ordinary.copy(post = ordinary.post.copy(text = "Updated"), pinned = true)
+        val refreshed = feed.refresh(listOf(other, ordinary), listOf(fresh, ordinary), emptySet(), false)
+        assertEquals(listOf(fresh, other), refreshed.items)
+        val newPost = other.copy(post = other.post.copy(uri = "at://post/new"))
+        val next = feed.refresh(refreshed.items, listOf(fresh, newPost, ordinary), emptySet(), false)
+        assertEquals(listOf(fresh, newPost, other), next.items)
+        assertEquals(1, next.items.count { it.readingKey == pin.readingKey })
+        val changedPin = other.copy(pinned = true)
+        val changed = feed.refresh(next.items, listOf(changedPin, ordinary), emptySet(), false)
+        assertEquals(changedPin, changed.items.first())
+        assertEquals(1, changed.items.count { it.pinned })
+        val unpinned = feed.refresh(changed.items, listOf(other, ordinary), emptySet(), false)
+        assertFalse(unpinned.items.any { it.pinned })
+    }
+
+    @Test fun xPinsKeepTheExistingFirstOccurrenceAndOrder() {
+        val feed = readingFeedPolicy()
+        val ordinary = item().let { it.copy(post = it.post.copy(uri = "x:one")) }
+        val pin = ordinary.copy(pinned = true)
+        val other = ordinary.copy(post = ordinary.post.copy(uri = "x:two"))
+        assertEquals(listOf(other, ordinary), feed.unique(listOf(other, ordinary, pin)))
+        assertEquals(listOf(other, pin), feed.refresh(listOf(other, ordinary), listOf(pin), emptySet(), false).items)
+    }
+
     @Test fun snapshotRoundTripsPostsWithInstantsAndFacets() {
         val original = item().let { it.copy(post = it.post.copy(facets = listOf(RichText.Facet(0, 5, RichText.Facet.Kind.TAG, "hello")))) }
         assertEquals(original, Json.decodeFromString<FeedItem>(Json.encodeToString(original)))

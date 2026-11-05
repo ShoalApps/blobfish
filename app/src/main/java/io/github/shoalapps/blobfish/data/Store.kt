@@ -13,7 +13,7 @@ data class Settings(
     val theme: Int = 0,
     val offlineMode: Boolean = false,
     val dynamicColor: Boolean = true,
-    /** Render markdown-style formatting (code blocks, bold, italic) the way mu does. */
+    /** Render inline code and fenced code blocks the way mu does. */
     val richFormatting: Boolean = true,
     val showReposts: Boolean = true,
     val showReplies: Boolean = true,

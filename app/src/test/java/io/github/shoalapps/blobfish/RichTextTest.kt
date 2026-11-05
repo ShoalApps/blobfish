@@ -28,19 +28,65 @@ class RichTextTest {
         assertEquals("ls -la", code.code)
     }
 
-    @Test fun inlineMarkdownDropsItsMarkers() {
-        val p = RichText.parse("a **bold** and *soft* and `code` and ~~gone~~").single() as RichText.Paragraph
-        assertEquals("a bold and soft and code and gone", p.text)
-        val styles = p.spans.filterIsInstance<RichText.Styled>().associate { p.text.substring(it.start, it.end) to it.style }
-        assertEquals(RichText.Style.BOLD, styles["bold"])
-        assertEquals(RichText.Style.ITALIC, styles["soft"])
-        assertEquals(RichText.Style.CODE, styles["code"])
-        assertEquals(RichText.Style.STRIKE, styles["gone"])
+    private fun paragraph(text: String) = RichText.parse(text).single() as RichText.Paragraph
+    private fun codeIn(p: RichText.Paragraph) = p.spans.filterIsInstance<RichText.InlineCode>().map { p.text.substring(it.start, it.end) }
+
+    // The next five mirror mu's own src/lib/code/parse.test.ts.
+    @Test fun inlineCodeDropsItsBackticks() {
+        val p = paragraph("run `npm test` now")
+        assertEquals("run npm test now", p.text)
+        assertEquals(listOf("npm test"), codeIn(p))
     }
 
-    @Test fun underscoresInsideWordsAreNotItalic() {
-        val p = RichText.parse("snake_case_name stays").single() as RichText.Paragraph
-        assertEquals("snake_case_name stays", p.text)
+    @Test fun oneLineTripleFenceIsInlineCode() {
+        val p = paragraph("see ```some code``` here")
+        assertEquals("see some code here", p.text)
+        assertEquals(listOf("some code"), codeIn(p))
+    }
+
+    @Test fun languageLabelsMayHaveSymbolsAndTrailingSpace() {
+        assertEquals("c++", (RichText.parse("```c++\nint x;\n```").single() as RichText.Code).language)
+        assertEquals("c#", (RichText.parse("```c#\nint x;\n```").single() as RichText.Code).language)
+        assertEquals("ts", (RichText.parse("```ts  \nconst x = 1\n```").single() as RichText.Code).language)
+    }
+
+    @Test fun multiLineBodiesKeepTheirLines() {
+        assertEquals("a\nb", (RichText.parse("```js\na\nb\n```").single() as RichText.Code).code)
+    }
+
+    @Test fun unmatchedOrEmptyBackticksStayLiteral() {
+        assertEquals("a lone ` backtick", paragraph("a lone ` backtick").text)
+        val empty = paragraph("a `` b")
+        assertEquals("a `` b", empty.text)
+        assertTrue(empty.spans.isEmpty())
+    }
+
+    @Test fun otherMarkdownIsShownAsTyped() {
+        val text = "a **bold** and *soft* and _lean_ and ~~gone~~ and # not a heading"
+        val p = paragraph(text)
+        assertEquals(text, p.text)
+        assertTrue(p.spans.isEmpty())
+    }
+
+    @Test fun markersInsideCodeStayLiteral() {
+        assertEquals(listOf("**x**"), codeIn(paragraph("`**x**`")))
+    }
+
+    @Test fun windowsLineEndingsDoNotLeakIntoCode() {
+        assertEquals("a\nb", (RichText.parse("```\r\na\r\nb\r\n```").single() as RichText.Code).code.trim())
+    }
+
+    @Test fun aFenceThroughALinkIsLeftLiteral() {
+        val text = "```\nhttps://example.com\n```"
+        val start = RichText.byteIndex(text, 4)
+        val p = RichText.parse(text, listOf(Facet(start, start + 19, Facet.Kind.LINK, "https://example.com"))).single() as RichText.Paragraph
+        assertEquals(text, p.text)
+        assertEquals(1, p.spans.filterIsInstance<RichText.Link>().size)
+    }
+
+    @Test fun switchedOffShowsEverythingAsTyped() {
+        val text = "`x`\n```\ny\n```"
+        assertEquals(text, (RichText.parse(text, markdown = false).single() as RichText.Paragraph).text)
     }
 
     @Test fun facetsUseUtf8ByteOffsets() {
@@ -53,8 +99,8 @@ class RichTextTest {
     }
 
     @Test fun facetsStayAlignedAfterMarkersAreRemoved() {
-        val text = "**hi** @alice.bsky.social"
-        val start = RichText.byteIndex(text, 7)
+        val text = "`hi` @alice.bsky.social"
+        val start = RichText.byteIndex(text, 5)
         val facet = Facet(start, start + "@alice.bsky.social".length, Facet.Kind.MENTION, "did:plc:alice")
         val p = RichText.parse(text, listOf(facet)).single() as RichText.Paragraph
         assertEquals("hi @alice.bsky.social", p.text)

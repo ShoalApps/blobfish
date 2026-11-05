@@ -1,19 +1,18 @@
 package io.github.shoalapps.blobfish.data
 
 /**
- * Turns a post's text into blocks, mu-style: fenced code blocks (```lang … ```) become their own
- * blocks, and the rest gets inline `code`, **bold**, *italic* / _italic_ and ~~strike~~, plus
- * Bluesky's own facets (links, mentions, hashtags). Plain Kotlin, so it can be unit tested.
+ * Turns a post's text into blocks using mu's rules (eurosky-social-app, src/lib/code/parse.ts):
+ * only inline `code` and multi-line ``` fences are formatting. A one-line ```triple``` is inline
+ * code, unbalanced backticks stay literal, and every other character, such as **these**, is shown
+ * as the author typed it. Bluesky's own facets are kept. Plain Kotlin, so it can be unit tested.
  */
 object RichText {
     sealed interface Block
     data class Paragraph(val text: String, val spans: List<Span>) : Block
     data class Code(val language: String?, val code: String) : Block
 
-    enum class Style { BOLD, ITALIC, CODE, STRIKE }
-
     sealed interface Span { val start: Int; val end: Int }
-    data class Styled(override val start: Int, override val end: Int, val style: Style) : Span
+    data class InlineCode(override val start: Int, override val end: Int) : Span
     data class Link(override val start: Int, override val end: Int, val uri: String) : Span
     data class Mention(override val start: Int, override val end: Int, val did: String) : Span
     data class Tag(override val start: Int, override val end: Int, val tag: String) : Span
@@ -24,14 +23,8 @@ object RichText {
         enum class Kind { LINK, MENTION, TAG }
     }
 
-    private val fence = Regex("""```([\w+#.-]*)[ \t]*\n?(.*?)\n?```""", RegexOption.DOT_MATCHES_ALL)
-    private val inline = listOf(
-        Regex("""`([^`\n]+)`""") to Style.CODE,
-        Regex("""\*\*([^*\n]+)\*\*""") to Style.BOLD,
-        Regex("""~~([^~\n]+)~~""") to Style.STRIKE,
-        Regex("""(?<![\w*])\*([^*\n]+)\*(?![\w*])""") to Style.ITALIC,
-        Regex("""(?<![\w_])_([^_\n]+)_(?![\w_])""") to Style.ITALIC,
-    )
+    // Order matters: 1 = lang and 2 = body of a multi-line fence, 3 = one-line triple, 4 = inline.
+    private val code = Regex("""```([^\n`]*)\n([\s\S]*?)\n?```|```([^\n`]+?)```|`([^`\n]+?)`""")
 
     /** Character index in [text] for a UTF-8 byte offset, as used by facets. */
     fun charIndex(text: String, byteOffset: Int): Int {
@@ -66,39 +59,37 @@ object RichText {
         }
         val blocks = mutableListOf<Block>()
         var cursor = 0
-        for (m in if (markdown) fence.findAll(text) else emptySequence()) {
+        for (m in if (markdown) code.findAll(text) else emptySequence()) {
+            if (m.groups[2] == null) continue // Inline code stays in its paragraph.
             // A fence that overlaps a link is part of the link, not code.
             if (facetSpans.any { it.start < m.range.last + 1 && it.end > m.range.first }) continue
             if (m.range.first > cursor) paragraph(text, cursor, m.range.first, facetSpans, markdown)?.let(blocks::add)
-            blocks += Code(m.groupValues[1].ifBlank { null }, m.groupValues[2].trimEnd())
+            blocks += Code(m.groupValues[1].trim().ifBlank { null }, m.groupValues[2].replace("\r\n", "\n").replace('\r', '\n'))
             cursor = m.range.last + 1
         }
         if (cursor < text.length) paragraph(text, cursor, text.length, facetSpans, markdown)?.let(blocks::add)
         return blocks
     }
 
-    /** Builds one paragraph from text[from, to), removing markdown markers and keeping spans aligned. */
+    /** Builds one paragraph from text[from, to), removing code markers and keeping spans aligned. */
     private fun paragraph(text: String, from: Int, to: Int, facets: List<Span>, markdown: Boolean = true): Paragraph? {
         val raw = text.substring(from, to).trim('\n')
         if (raw.isBlank()) return null
         val offset = from + text.substring(from, to).indexOf(raw)
         val local = facets.filter { it.start >= offset && it.end <= offset + raw.length }.map { shift(it, -offset) }
 
-        // Find markdown spans that don't cut through a facet; markers are the characters to drop.
+        // Find code spans that don't cut through a facet; markers are the characters to drop.
         val removed = BooleanArray(raw.length)
-        val styled = mutableListOf<Styled>()
-        val taken = BooleanArray(raw.length)
-        for ((regex, style) in if (markdown) inline else emptyList()) {
-            for (m in regex.findAll(raw)) {
-                val r = m.range
-                if ((r.first..r.last).any { taken[it] }) continue
-                if (local.any { it.start < r.last + 1 && it.end > r.first }) continue
-                val inner = m.groups[1]?.range ?: continue
-                for (i in r.first until inner.first) removed[i] = true
-                for (i in inner.last + 1..r.last) removed[i] = true
-                for (i in r) taken[i] = true
-                styled += Styled(inner.first, inner.last + 1, style)
-            }
+        val codeSpans = mutableListOf<InlineCode>()
+        for (m in if (markdown) code.findAll(raw) else emptySequence()) {
+            val r = m.range
+            if (m.groups[2] != null) continue // A fence left literal because a facet runs through it.
+            if (local.any { it.start < r.last + 1 && it.end > r.first }) continue
+            val inner = (m.groups[3] ?: m.groups[4])?.range ?: continue
+            for (i in r.first until inner.first) removed[i] = true
+            for (i in inner.last + 1..r.last) removed[i] = true
+            for (i in inner) if (raw[i] == '\r') removed[i] = true
+            codeSpans += InlineCode(inner.first, inner.last + 1)
         }
         // Map every original index to its position once markers are removed.
         val map = IntArray(raw.length + 1)
@@ -108,19 +99,19 @@ object RichText {
             if (!removed[i]) out.append(raw[i])
         }
         map[raw.length] = out.length
-        val spans = (styled + local).map { remap(it, map) }.filter { it.end > it.start }.sortedBy { it.start }
+        val spans = (codeSpans + local).map { remap(it, map) }.filter { it.end > it.start }.sortedBy { it.start }
         return Paragraph(out.toString(), spans)
     }
 
     private fun shift(s: Span, by: Int): Span = when (s) {
-        is Styled -> s.copy(start = s.start + by, end = s.end + by)
+        is InlineCode -> s.copy(start = s.start + by, end = s.end + by)
         is Link -> s.copy(start = s.start + by, end = s.end + by)
         is Mention -> s.copy(start = s.start + by, end = s.end + by)
         is Tag -> s.copy(start = s.start + by, end = s.end + by)
     }
 
     private fun remap(s: Span, map: IntArray): Span = when (s) {
-        is Styled -> s.copy(start = map[s.start], end = map[s.end])
+        is InlineCode -> s.copy(start = map[s.start], end = map[s.end])
         is Link -> s.copy(start = map[s.start], end = map[s.end])
         is Mention -> s.copy(start = map[s.start], end = map[s.end])
         is Tag -> s.copy(start = map[s.start], end = map[s.end])

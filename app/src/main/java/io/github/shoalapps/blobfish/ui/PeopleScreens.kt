@@ -266,6 +266,12 @@ fun EditProfileScreen(onBack: () -> Unit) {
             bio = p.description.orEmpty()
         }.onFailure { toast(context, friendly(it)) }
     }
+    val nameLimit = io.github.shoalapps.blobfish.data.BlueskyText.displayName
+    val bioLimit = io.github.shoalapps.blobfish.data.BlueskyText.bio
+    val nameCount = io.github.shoalapps.blobfish.data.graphemeCount(name)
+    val bioCount = io.github.shoalapps.blobfish.data.graphemeCount(bio)
+    val validName = nameLimit.accepts(name)
+    val validBio = bioLimit.accepts(bio)
     val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let { u -> newAvatar = u } }
     val pickBanner = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let { u -> newBanner = u } }
     val images = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -277,7 +283,7 @@ fun EditProfileScreen(onBack: () -> Unit) {
                 title = { Text("Edit profile") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
                 actions = {
-                    Button(enabled = profile != null && !saving, modifier = Modifier.padding(end = 8.dp), onClick = {
+                    Button(enabled = profile != null && !saving && validName && validBio, modifier = Modifier.padding(end = 8.dp), onClick = {
                         saving = true
                         scope.launch {
                             runCatching {
@@ -311,10 +317,15 @@ fun EditProfileScreen(onBack: () -> Unit) {
                 }
             }
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 60.dp, bottom = 32.dp)) {
-                OutlinedTextField(name, { if (it.length <= 64) name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (!nameLimit.fitsBytes(name) || !bioLimit.fitsBytes(bio)) {
+                    Text("This text takes up too much space. Shorten it to continue.", color = MaterialTheme.colorScheme.error)
+                }
+                OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true,
+                    isError = !validName, supportingText = { Text("${nameCount}/${nameLimit.graphemes}") },
+                    modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(
-                    bio, { if (it.length <= 256) bio = it }, label = { Text("Description") },
-                    supportingText = { Text("${bio.length}/256") }, minLines = 4,
+                    bio, { bio = it }, label = { Text("Description") },
+                    isError = !validBio, supportingText = { Text("${bioCount}/${bioLimit.graphemes}") }, minLines = 4,
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 )
             }

@@ -12,7 +12,7 @@ class BlueskyParse(
     private val embeds = setOf("app.bsky.embed.images#view", "app.bsky.embed.external#view",
         "app.bsky.embed.video#view", "app.bsky.embed.record#view", "app.bsky.embed.recordWithMedia#view",
         "app.bsky.embed.gallery#view")
-    /** A quoted post that's gone or blocked has nothing more to show, so it isn't a missing feature. */
+    /** Unavailable quotes are known variants and have their own placeholder. */
     private val quotes = setOf("app.bsky.embed.record#viewRecord", "app.bsky.embed.record#viewNotFound",
         "app.bsky.embed.record#viewBlocked", "app.bsky.embed.record#viewDetached")
     private val features = setOf("app.bsky.richtext.facet#link", "app.bsky.richtext.facet#mention", "app.bsky.richtext.facet#tag")
@@ -117,6 +117,7 @@ class BlueskyParse(
             media = MediaParsing.bluesky(embed),
             card = card(embed),
             quote = quote(embed),
+            quoteAvailability = quoteAvailability(embed),
             myLike = recordState("app.bsky.feed.like", o.str("uri").orEmpty(), o["viewer"].obj.str("like")),
             myRepost = recordState("app.bsky.feed.repost", o.str("uri").orEmpty(), o["viewer"].obj.str("repost")),
             replyRoot = record["reply"].obj?.get("root").obj?.let { r -> Ref(r.str("uri") ?: return@let null, r.str("cid") ?: return@let null) },
@@ -160,8 +161,19 @@ class BlueskyParse(
         return LinkCard(ext.str("uri") ?: return null, ext.str("title").orEmpty(), ext.str("description").orEmpty(), ext.str("thumb"))
     }
 
+    private fun quotedRecord(embed: JsonObject?): JsonObject? =
+        embed?.get("record").obj?.let { it["record"].obj ?: it }
+
+    private fun quoteAvailability(embed: JsonObject?): QuoteAvailability? = when (quotedRecord(embed).str("\$type")) {
+        "app.bsky.embed.record#viewRecord" -> QuoteAvailability.AVAILABLE
+        "app.bsky.embed.record#viewNotFound" -> QuoteAvailability.DELETED
+        "app.bsky.embed.record#viewBlocked" -> QuoteAvailability.BLOCKED
+        "app.bsky.embed.record#viewDetached" -> QuoteAvailability.DETACHED
+        else -> null
+    }
+
     private fun quote(embed: JsonObject?): Post? {
-        val rec = (embed?.get("record").obj?.let { it["record"].obj ?: it }) ?: return null
+        val rec = quotedRecord(embed) ?: return null
         if (rec.str("\$type") != "app.bsky.embed.record#viewRecord") return null
         val author = rec["author"].obj?.let(::parseAuthor) ?: return null
         val value = rec["value"].obj ?: return null

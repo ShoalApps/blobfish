@@ -14,7 +14,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -94,7 +92,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -134,10 +131,10 @@ fun Avatar(url: String?, size: Dp, modifier: Modifier = Modifier) {
     }
 }
 
-/** A post's text with mu-style formatting: paragraphs with facets and markdown, and highlighted code blocks. */
+/** Text with mu's formatting: facets, inline code and highlighted fences. Like mu, quotes and bios pass code = false. */
 @Composable
-fun RichTextView(text: String, facets: List<RichText.Facet>, nav: Nav, maxLines: Int = Int.MAX_VALUE, large: Boolean = false) {
-    val markdown = Graph.store.settings.collectAsState().value.richFormatting
+fun RichTextView(text: String, facets: List<RichText.Facet>, nav: Nav, maxLines: Int = Int.MAX_VALUE, large: Boolean = false, code: Boolean = true) {
+    val markdown = code && Graph.store.settings.collectAsState().value.richFormatting
     val blocks = remember(text, facets, markdown) { RichText.parse(text, facets, markdown) }
     val linkColor = MaterialTheme.colorScheme.primary
     val codeBg = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -150,15 +147,7 @@ fun RichTextView(text: String, facets: List<RichText.Facet>, nav: Nav, maxLines:
                         buildAnnotatedString {
                             append(b.text)
                             for (s in b.spans) when (s) {
-                                is RichText.Styled -> addStyle(
-                                    when (s.style) {
-                                        RichText.Style.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
-                                        RichText.Style.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
-                                        RichText.Style.STRIKE -> SpanStyle(textDecoration = TextDecoration.LineThrough)
-                                        RichText.Style.CODE -> SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg, fontSize = 14.sp)
-                                    },
-                                    s.start, s.end,
-                                )
+                                is RichText.InlineCode -> addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg, fontSize = 14.sp), s.start, s.end)
                                 is RichText.Link -> addLink(LinkAnnotation.Url(s.uri, TextLinkStyles(SpanStyle(color = linkColor))), s.start, s.end)
                                 is RichText.Mention -> addLink(LinkAnnotation.Clickable("m", TextLinkStyles(SpanStyle(color = linkColor))) { nav.profile(s.did) }, s.start, s.end)
                                 is RichText.Tag -> addLink(LinkAnnotation.Clickable("t", TextLinkStyles(SpanStyle(color = linkColor))) { nav.tag(s.tag) }, s.start, s.end)
@@ -196,22 +185,22 @@ private fun CodeBlock(b: RichText.Code, context: Context) {
         }
     }
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
-        Column {
-            Row(Modifier.fillMaxWidth().padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(b.language ?: "code", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                IconButton(onClick = {
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", b.code))
-                    toast(context, "Code copied")
-                }) { Icon(Icons.Rounded.ContentCopy, "Copy code", Modifier.size(18.dp)) }
-            }
+        Box {
+            // Like mu, long lines wrap rather than scroll sideways. The copy button is ours.
             Text(
                 highlighted,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
-                softWrap = false,
-                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 44.dp, top = 12.dp, bottom = 12.dp),
             )
+            IconButton(
+                onClick = {
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", b.code))
+                    toast(context, "Code copied")
+                },
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) { Icon(Icons.Rounded.ContentCopy, "Copy code", Modifier.size(18.dp)) }
         }
     }
 }
@@ -297,7 +286,7 @@ fun PostCard(
                     PostMedia(post, Modifier.padding(top = 10.dp))
                     post.card?.let { LinkCardView(it, Modifier.padding(top = 10.dp)) }
                 }
-                post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 10.dp)) }
+                PostQuote(post, nav, Modifier.padding(top = 10.dp))
                 CompatibilityNote(post)
                 Actions(post, nav)
             }
@@ -378,7 +367,7 @@ fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
                 PostMedia(post, Modifier.padding(top = 12.dp))
                 post.card?.let { LinkCardView(it, Modifier.padding(top = 12.dp)) }
             }
-            post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 12.dp)) }
+            PostQuote(post, nav, Modifier.padding(top = 12.dp))
             CompatibilityNote(post)
         }
         Text(
@@ -409,6 +398,30 @@ fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
 }
 
+/** Keep an unavailable quote in the same position as an available quote. */
+@Composable
+fun PostQuote(post: Post, nav: Nav, modifier: Modifier = Modifier) {
+    val message = when (post.quoteAvailability) {
+        io.github.shoalapps.blobfish.data.QuoteAvailability.DELETED -> "Post deleted"
+        io.github.shoalapps.blobfish.data.QuoteAvailability.BLOCKED -> "Blocked"
+        io.github.shoalapps.blobfish.data.QuoteAvailability.DETACHED -> "Removed by the quoted author"
+        else -> null
+    }
+    if (message == null) {
+        post.quote?.let { QuoteCard(it, nav, modifier) }
+    } else {
+        Surface(
+            shape = RoundedCornerShape(16.dp), color = Color.Transparent,
+            modifier = modifier.fillMaxWidth()
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                .testTag("quote-placeholder"),
+        ) {
+            Text(message, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp))
+        }
+    }
+}
+
 /** A quoted post in a rounded box, with its own moderation. */
 @Composable
 fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
@@ -431,7 +444,7 @@ fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(4.dp))
             if (quoteDecision is Moderation.Decision.Warn) Text("Content warning: ${quoteDecision.reason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             else {
-                RichTextView(q.text, q.facets, nav, maxLines = 6)
+                RichTextView(q.text, q.facets, nav, maxLines = 6, code = false)
                 CompatibilityNote(q)
                 if (quoteDecision is Moderation.Decision.BlurMedia) Text("Media hidden by content warning", style = MaterialTheme.typography.bodyMedium)
                 else {
@@ -487,13 +500,32 @@ private fun Images(post: Post, modifier: Modifier) {
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     col.forEach { index ->
                         val i = imgs[index]
-                        AsyncImage(
-                            model = i.thumb,
-                            contentDescription = i.alt.ifBlank { null },
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().weight(1f)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { viewing = index }.testTag("post-image"),
-                        )
+                        if (!post.uri.startsWith("x:") && index == 3 && imgs.size > 4) {
+                            Box(Modifier.fillMaxWidth().weight(1f)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .clickable { viewing = index }.testTag("post-image")) {
+                                AsyncImage(
+                                    model = i.thumb,
+                                    contentDescription = i.alt.ifBlank { null },
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)),
+                                    contentAlignment = Alignment.Center) {
+                                    Text("+${imgs.size - 4}", color = Color.White,
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        modifier = Modifier.testTag("gallery-overflow"))
+                                }
+                            }
+                        } else {
+                            AsyncImage(
+                                model = i.thumb,
+                                contentDescription = i.alt.ifBlank { null },
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxWidth().weight(1f)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { viewing = index }.testTag("post-image"),
+                            )
+                        }
                     }
                 }
             }

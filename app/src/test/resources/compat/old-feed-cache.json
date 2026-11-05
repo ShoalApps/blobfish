@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "post": {
+        "uri": "at://did:plc:test/app.bsky.feed.post/quote",
+        "cid": "cid",
+        "author": {
+          "did": "did:plc:test",
+          "handle": "test.example",
+          "displayName": null,
+          "avatar": null
+        },
+        "text": "Cached post",
+        "facets": [],
+        "createdAt": null,
+        "replyCount": 0,
+        "repostCount": 0,
+        "likeCount": 0,
+        "images": [],
+        "card": null,
+        "quote": null,
+        "myLike": null,
+        "myRepost": null,
+        "replyRoot": null
+      },
+      "repostedBy": null,
+      "replyTo": null
+    }
+  ],
+  "cursor": "next"
+}

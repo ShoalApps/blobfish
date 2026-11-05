@@ -1,5 +1,13 @@
 [
   {
+    "title": "Posts read as written",
+    "body": "Formatting now follows mu: inline code and code blocks are styled, and everything else, including asterisks, appears exactly as the author typed it."
+  },
+  {
+    "title": "Clearer Bluesky posts",
+    "body": "Unavailable quotes now explain what happened, larger photo galleries show how many more pictures there are, profile pins stay at the top, and text limits count emoji as whole characters."
+  },
+  {
     "title": "Staying up to date",
     "body": "A new Settings screen shows how closely Butterflyfish follows Bluesky and X, and what it can't show yet. Bluesky photo galleries now appear in posts, and anything else new gets a link to open it on Bluesky rather than vanishing. X shows your name, handle and picture, and its feed comes back instantly when you return to it."
   },

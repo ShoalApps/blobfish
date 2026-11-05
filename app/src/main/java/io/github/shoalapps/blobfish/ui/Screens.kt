@@ -216,7 +216,7 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
         // Like Bluesky: the post being replied to, then the reply, joined by the thread line.
         Column {
             PostCard(parent, nav, lineBelow = true)
-            PostCard(item.post, nav, lineAbove = true)
+            PostCard(item.post, nav, lineAbove = true, pinned = item.pinned && !item.post.uri.startsWith("x:"))
         }
     } else {
         PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo, pinned = item.pinned)
@@ -588,7 +588,7 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
             }
             p.description?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(10.dp))
-                RichTextView(it, emptyList(), nav)
+                RichTextView(it, emptyList(), nav, code = false)
             }
             if (p.links.isNotEmpty()) {
                 // Profile Links: straight to the site, Patreon and Ko-fi in green like Bluesky.
@@ -971,19 +971,23 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: Str
             }
         }
     }
-    val limit = 300
-    val count = text.codePointCount(0, text.length)
+    val limit = io.github.shoalapps.blobfish.data.BlueskyText.post.graphemes
+    val count = io.github.shoalapps.blobfish.data.graphemeCount(text)
+    val validText = io.github.shoalapps.blobfish.data.BlueskyText.post.accepts(text)
     ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { !busy || it != androidx.compose.material3.SheetValue.Hidden },
     )) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp).imePadding()) {
+            if (!io.github.shoalapps.blobfish.data.BlueskyText.post.fitsBytes(text)) {
+                Text("This text takes up too much space. Shorten it to continue.", color = MaterialTheme.colorScheme.error)
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(enabled = !busy, onClick = dismiss) { Icon(Icons.Rounded.Close, "Close") }
                 Text(if (replyTo != null) "Reply to ${parent?.author?.name ?: replyTo.author.name}" else "New post", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text("${limit - count}", color = if (count > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${limit - count}", color = if (!validText) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
-                    enabled = !busy && draft.error == null && owner != null && (text.isNotBlank() || pictures.isNotEmpty()) && count <= limit,
+                    enabled = !busy && draft.error == null && owner != null && (text.isNotBlank() || pictures.isNotEmpty()) && validText,
                     onClick = {
                         busy = true
                         postError = null
@@ -1205,7 +1209,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 }
             }
             group("Posts") {
-                row { sh -> Toggle("Rich formatting", "Show code blocks, bold and italic in posts, like mu", s.richFormatting, sh) { v -> store.updateSettings { it.copy(richFormatting = v) } } }
+                row { sh -> Toggle("Rich formatting", "Show code blocks and inline code in posts, like mu", s.richFormatting, sh) { v -> store.updateSettings { it.copy(richFormatting = v) } } }
             }
             group(XBrand.name) {
                 row { sh -> Toggle("Show my ${XBrand.name} account", "In the account switcher: x.com, signed in on its own page", s.showX, sh) { v -> store.updateSettings { it.copy(showX = v, service = if (!v) "bluesky" else it.service) } } }
