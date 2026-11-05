@@ -223,8 +223,11 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
 // ---------------- Home ----------------
 
 @Composable
-fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
+fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: () -> Unit) {
     val session by Graph.store.session.collectAsState()
+    val draftChanges by Graph.drafts.changes.collectAsState()
+    val owner = session?.let { it.did + "|" + it.pds }
+    val hasDrafts = remember(owner, draftChanges) { owner?.let { Graph.drafts.list(it).isNotEmpty() } == true }
     // Your pinned feeds as tabs, in the order you set in Bluesky, like Bluesky's home.
     val feeds by produceState(listOf(io.github.shoalapps.blobfish.data.Atp.PinnedFeed("feed", Graph.atp.discoverFeed, "Discover")), session?.did) {
         runCatching { Graph.atp.pinnedFeeds() }.onSuccess { if (it.isNotEmpty()) value = it }
@@ -246,7 +249,10 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit) {
             }
         },
         floatingActionButton = {
-            if (session != null) FloatingActionButton(onClick = onCompose) { Icon(Icons.Rounded.Edit, "New post") }
+            if (session != null) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hasDrafts) androidx.compose.material3.FilledTonalButton(onClick = onDrafts) { Text("Drafts") }
+                FloatingActionButton(onClick = onCompose) { Icon(Icons.Rounded.Edit, "New post") }
+            }
         },
     ) { pad ->
         Box(Modifier.padding(top = pad.calculateTopPadding())) {
@@ -819,10 +825,14 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
 // ---------------- Composer ----------------
 
 /** A terminal flag keeps a pending debounce or disposal from restoring a discarded/sent draft. */
-private class ComposerDraft(private val owner: String, replyTo: String?) {
-    private val restored = runCatching { Graph.drafts.load(owner, replyTo) }
+private class ComposerDraft(private val owner: String, replyTo: Post?) {
+    private val restored = runCatching { Graph.drafts.load(owner, replyTo?.uri) }
     val error = restored.exceptionOrNull()
-    var value by mutableStateOf(restored.getOrNull() ?: Draft(replyTo = replyTo))
+    var value by mutableStateOf((restored.getOrNull() ?: Draft(replyTo = replyTo?.uri)).let { draft ->
+        draft.copy(replyTarget = draft.replyTarget ?: replyTo?.let {
+            io.github.shoalapps.blobfish.data.DraftReply(it.cid, it.replyRoot?.uri, it.replyRoot?.cid)
+        })
+    })
     private var finished = false
     fun save() { if (!finished && error == null) Graph.drafts.save(owner, value) }
     fun discard() {
@@ -841,6 +851,11 @@ private class ComposerDraft(private val owner: String, replyTo: String?) {
 fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
     val session by Graph.store.session.collectAsState()
     val owner = session?.let { it.did + "|" + it.pds }
+    val openedBy = remember { owner }
+    if (owner != openedBy) {
+        LaunchedEffect(owner) { onDismiss() }
+        return
+    }
     androidx.compose.runtime.key(owner, replyTo?.uri) {
         DraftComposer(owner, replyTo, nav, onDismiss)
     }
@@ -850,9 +865,17 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
 private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val draft = remember { ComposerDraft(owner ?: "bluesky|signed-out", replyTo?.uri) }
+    val draft = remember { ComposerDraft(owner ?: "bluesky|signed-out", replyTo) }
     val text = draft.value.text
     val pictures = draft.value.pictures
+    // Keep the saved strong references even when reopened from a freshly fetched post.
+    val target = replyTo?.let { post ->
+        draft.value.replyTarget?.let { saved ->
+            post.copy(cid = saved.cid, replyRoot = saved.rootUri?.let {
+                io.github.shoalapps.blobfish.data.Ref(it, saved.rootCid ?: error("Missing thread root"))
+            })
+        } ?: post
+    }
     var busy by remember { mutableStateOf(false) }
     var altFor by remember { mutableStateOf<Int?>(null) }
     fun save(): Boolean = runCatching { draft.save() }.onFailure {
@@ -918,7 +941,7 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, onDismiss: (
                                     io.github.shoalapps.blobfish.data.Atp.Attachment(blob, alt, w, h)
                                 }
                                 check(Graph.offline.owner() == owner) { "Your account changed. Reopen this draft to post it." }
-                                Graph.atp.post(text.trim(), replyTo, images)
+                                Graph.atp.post(text.trim(), target, images)
                             }
                                 .onSuccess {
                                     runCatching { draft.sent() }.onFailure { toast(context, "Your post is saved to send, but the draft couldn't be removed.") }

@@ -125,6 +125,89 @@ class DraftsTest {
         assertNull(drafts.load("a", null))
     }
 
+    @Test fun listingIsNewestFirstAndUsesSavedTimeAfterRestart() {
+        var time = 1000L
+        val drafts = Drafts(directory) { time }
+        val picture = drafts.copyPicture("a", "reply") { ByteArrayInputStream(byteArrayOf(1)) }
+        val reply = Draft("Reply", "reply", listOf(picture), DraftReply("parent-cid", "root-uri", "root-cid"))
+        drafts.save("a", reply)
+        time = 2000L
+        drafts.save("a", Draft("New post"))
+        assertEquals(listOf(SavedDraft(Draft("New post"), 2000L), SavedDraft(reply, 1000L)), store().list("a"))
+        time = 3000L
+        drafts.save("a", reply.copy(text = "Edited reply"))
+        assertEquals(listOf("Edited reply", "New post"), store().list("a").map { it.draft.text })
+        assertEquals(3000L, store().list("a").first().savedAt)
+        assertEquals(reply.replyTarget, store().load("a", "reply")?.replyTarget)
+    }
+
+    @Test fun listingSeparatesAccountsIncludingTheSameDidOnDifferentServers() {
+        val drafts = store()
+        val owners = listOf("did:a|https://one", "did:a|https://two", "did:b|https://one", "a|b", "a")
+        owners.forEach { owner ->
+            drafts.save(owner, Draft("Post for $owner"))
+            drafts.save(owner, Draft("Reply for $owner", "same-target"))
+        }
+        owners.forEach { owner ->
+            assertEquals(setOf("Post for $owner", "Reply for $owner"), store().list(owner).map { it.draft.text }.toSet())
+        }
+        assertTrue(drafts.list("signed-out").isEmpty())
+        drafts.discard(owners.first(), "same-target")
+        assertEquals(1, drafts.list(owners.first()).size)
+        assertEquals(2, drafts.list(owners[1]).size)
+    }
+
+    @Test fun legacyDraftsUseTheFileTimeWithoutBeingRewritten() {
+        val drafts = Drafts(directory) { 2000L }
+        drafts.save("a", Draft("Legacy", "target"))
+        val file = directory.walkTopDown().first { it.name == "draft.json" }
+        val legacy = """{"text":"Legacy","replyTo":"target","pictures":[]}"""
+        file.writeText(legacy)
+        assertTrue(file.setLastModified(1000L))
+        drafts.save("a", Draft("Recent"))
+        assertEquals(listOf(2000L, 1000L), store().list("a").map { it.savedAt })
+        assertEquals(Draft("Legacy", "target"), store().list("a").last().draft)
+        assertTrue(store().list("b").isEmpty())
+        assertEquals(legacy, file.readText())
+    }
+
+    @Test fun listingSkipsBrokenFilesAndUnfinishedFoldersWithoutLosingGoodDrafts() {
+        val drafts = store()
+        drafts.save("a", Draft("Good"))
+        drafts.save("a", Draft("Broken", "broken"))
+        val broken = directory.walkTopDown().first { it.name == "draft.json" && it.readText().contains("Broken") }
+        broken.writeText("{broken")
+        drafts.save("a", Draft("Wrong type", "wrong-type"))
+        val wrongType = directory.walkTopDown().first { it.name == "draft.json" && it.readText().contains("Wrong type") }
+        wrongType.writeText("""{"text":[],"replyTo":"wrong-type"}""")
+        drafts.save("a", Draft("Bad time", "bad-time"))
+        val badTime = directory.walkTopDown().first { it.name == "draft.json" && it.readText().contains("Bad time") }
+        badTime.writeText("""{"text":"Bad time","replyTo":"bad-time","savedAt":"yesterday"}""")
+        drafts.save("a", Draft("Bad reply", "bad-reply"))
+        val badReply = directory.walkTopDown().first { it.name == "draft.json" && it.readText().contains("Bad reply") }
+        badReply.writeText("""{"text":"Bad reply","replyTo":"bad-reply","replyTarget":{"cid":"parent","rootUri":"root"}}""")
+        drafts.copyPicture("a", "unfinished") { ByteArrayInputStream(byteArrayOf(1)) }
+        File(directory, "stray-file").writeText("Not a folder")
+        File(directory, "misplaced").mkdir()
+        File(directory, "misplaced/draft.json").writeText("""{"text":"Wrong folder"}""")
+        assertEquals(listOf("Good"), store().list("a").map { it.draft.text })
+        assertEquals("{broken", broken.readText())
+        assertTrue(wrongType.exists())
+        assertEquals("Good", store().load("a", null)?.text)
+    }
+
+    @Test fun listingAnAbsentDirectoryIsEmptyAndDiscardUpdatesTheList() {
+        val drafts = store()
+        assertTrue(drafts.list("a").isEmpty())
+        assertFalse(directory.exists())
+        drafts.save("a", Draft("Saved"))
+        val savedRevision = drafts.changes.value
+        assertEquals(1, drafts.list("a").size)
+        drafts.discard("a", null)
+        assertTrue(drafts.changes.value > savedRevision)
+        assertTrue(store().list("a").isEmpty())
+    }
+
     @Test fun anEmptyDraftLeavesNothingBehind() {
         val drafts = store()
         drafts.save("account", Draft("words"))

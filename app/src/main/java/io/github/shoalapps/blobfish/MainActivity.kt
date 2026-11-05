@@ -233,7 +233,8 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
                 },
             ) { pad ->
                 NavHost(navController, startDestination = "home", modifier = Modifier.padding(bottom = pad.calculateBottomPadding())) {
-                    composable("home") { HomeScreen(nav, onSearch = { navController.goTab("search") }, onCompose = { replyTo = null; composing = true }) }
+                    composable("home") { HomeScreen(nav, onSearch = { navController.goTab("search") }, onCompose = { replyTo = null; composing = true }, onDrafts = { navController.navigate("drafts") }) }
+                    composable("drafts") { io.github.shoalapps.blobfish.ui.DraftsScreen(nav, onBack = { navController.popBackStack() }) }
                     composable("search") { SearchScreen(nav, onBack = { navController.popBackStack() }) }
                     composable("search?q={q}") { e -> SearchScreen(nav, onBack = { navController.popBackStack() }, initial = e.arguments?.getString("q")) }
                     composable("notifications") { NotificationsScreen(nav, onSignIn = { navController.navigate("signin") }) }
