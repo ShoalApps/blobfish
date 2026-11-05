@@ -18,6 +18,14 @@ class ModerationTest {
     )
     private val defaults = Moderation.Prefs()
 
+    @Test fun nsfwFilterUsesPostLabelsAndRecognisesAliases() {
+        for (label in listOf("porn", "sexual", "nudity", "graphic-media", "nsfw", "gore")) {
+            assertTrue(Moderation.isNsfw(post(labels = listOf(label))))
+        }
+        assertFalse(Moderation.isNsfw(post(labels = listOf("!warn"))))
+        assertFalse(Moderation.isNsfw(post(author = alice.copy(labels = listOf("porn")))))
+    }
+
     @Test fun adultContentIsHiddenUntilTurnedOn() {
         assertTrue(Moderation.decide(post(labels = listOf("porn")), defaults, true) is Decision.Hide)
         assertTrue(Moderation.decide(post(labels = listOf("nudity")), defaults, true) is Decision.Hide)

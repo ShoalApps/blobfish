@@ -18,6 +18,7 @@ data class Settings(
     val showReposts: Boolean = true,
     val showReplies: Boolean = true,
     val autoUpdate: Boolean = true,
+    val nsfwOnly: Boolean = false,
     /** Your X account in the account switcher (x.com, signed in on X's own login). */
     val showX: Boolean = true,
     /** Which account Butterflyfish is showing: "bluesky" or "x". */
@@ -52,6 +53,25 @@ class Store(context: Context) {
     )
     val session: StateFlow<Session?> = _session
 
+    private val _hiddenFollows = MutableStateFlow(readHiddenFollows(_session.value))
+    val hiddenFollows: StateFlow<Map<String, String>> = _hiddenFollows
+
+    private fun hiddenFollowKey(session: Session?) =
+        "hidden-follows|" + (session?.let { it.did + "|" + it.pds } ?: "public")
+
+    private fun readHiddenFollows(session: Session?): Map<String, String> =
+        prefs.getString(hiddenFollowKey(session), null)?.let {
+            runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull()
+        }.orEmpty()
+
+    @Synchronized
+    fun toggleHiddenFollow(did: String, handle: String) {
+        val saved = _hiddenFollows.value
+        val updated = if (did in saved) saved - did else saved + (did to handle)
+        prefs.edit().putString(hiddenFollowKey(_session.value), json.encodeToString(updated)).apply()
+        _hiddenFollows.value = updated
+    }
+
     fun updateSettings(change: (Settings) -> Settings) {
         _settings.update(change)
         io.github.shoalapps.blobfish.Graph.offline.changed()
@@ -71,6 +91,7 @@ class Store(context: Context) {
                 clearFeedAnchors(owner, waitForDisk = false)
             }
         }
+        if (hiddenFollowKey(previous) != hiddenFollowKey(s)) _hiddenFollows.value = readHiddenFollows(s)
         _session.value = s
         io.github.shoalapps.blobfish.Graph.offline.changed()
         if (s == null) { prefs.edit().remove("session").apply(); setModeration(Moderation.Prefs()) }

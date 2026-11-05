@@ -57,6 +57,7 @@ fun ModerationScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val p by Graph.store.moderation.collectAsState()
+    val settings by Graph.store.settings.collectAsState()
     val signedIn = Graph.store.session.collectAsState().value != null
     var addingWord by remember { mutableStateOf(false) }
     var mutes by remember { mutableStateOf<List<Author>?>(null) }
@@ -94,6 +95,13 @@ fun ModerationScreen(onBack: () -> Unit) {
                         RuleRow(title, if (adult && !p.adultContent) null else p.rule(label), sh) { rule ->
                             change { it.copy(rules = it.rules + (label to rule.name)) }
                         }
+                    }
+                }
+            }
+            group("On this device") {
+                row { shapes ->
+                    Toggle("Show only NSFW posts", "Filter Bluesky feeds and post search by content labels. Your warnings and hide rules still apply.", settings.nsfwOnly, shapes) { enabled ->
+                        Graph.store.updateSettings { it.copy(nsfwOnly = enabled) }
                     }
                 }
             }

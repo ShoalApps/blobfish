@@ -246,7 +246,9 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
     // Reply, repost and quote options are for the Following timeline only, as in Bluesky's app.
     if (following && Moderation.hiddenInFeed(item, prefs)) return
     if (Moderation.decide(item.post, prefs, Graph.store.session.value != null) is Moderation.Decision.Hide) return
-    val parent = item.parent
+    val parent = item.parent?.takeUnless {
+        !TwitterParse.isTwitter(item.post.author.did) && Graph.store.settings.value.nsfwOnly && !Moderation.isNsfw(it)
+    }
     if (parent != null && Moderation.decide(parent, prefs, Graph.store.session.value != null) !is Moderation.Decision.Hide) {
         // Like Bluesky: the post being replied to, then the reply, joined by the thread line.
         Column {
@@ -273,7 +275,12 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: 
         value = listOf(io.github.shoalapps.blobfish.data.Atp.PinnedFeed("feed", Graph.atp.discoverFeed, "Discover"))
         runCatching { Graph.atp.pinnedFeeds() }.onSuccess { if (it.isNotEmpty()) value = it }
     }
-    var tab by remember(feeds) { mutableStateOf(0) }
+    val hiddenFollows by Graph.store.hiddenFollows.collectAsState()
+    val homeFeeds = remember(feeds, hiddenFollows.isNotEmpty()) {
+        if (hiddenFollows.isEmpty()) feeds
+        else feeds + io.github.shoalapps.blobfish.data.Atp.PinnedFeed("hidden", "", "Hidden follows")
+    }
+    var tab by remember(homeFeeds, owner) { mutableStateOf(0) }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -282,9 +289,9 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: 
                     title = { Wordmark() },
                     actions = { IconButton(onClick = onSearch) { Icon(Icons.Rounded.Search, "Search") } },
                 )
-                if (feeds.size > 1) {
-                    androidx.compose.material3.PrimaryScrollableTabRow(selectedTabIndex = tab.coerceIn(0, feeds.lastIndex), edgePadding = 12.dp) {
-                        feeds.forEachIndexed { i, f -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(f.name, localise = false, maxLines = 1) }) }
+                if (homeFeeds.size > 1) {
+                    androidx.compose.material3.PrimaryScrollableTabRow(selectedTabIndex = tab.coerceIn(0, homeFeeds.lastIndex), edgePadding = 12.dp) {
+                        homeFeeds.forEachIndexed { i, f -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(f.name, localise = f.kind == "hidden", maxLines = 1) }) }
                     }
                 }
             }
@@ -297,7 +304,11 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: 
         },
     ) { pad ->
         Box(Modifier.padding(top = pad.calculateTopPadding())) {
-            val f = feeds[tab.coerceIn(0, feeds.lastIndex)]
+            val f = homeFeeds[tab.coerceIn(0, homeFeeds.lastIndex)]
+            if (f.kind == "hidden") {
+                HiddenFollowsFeed(hiddenFollows, owner, settings.appView, nav)
+                return@Box
+            }
             val feedOwner = "bluesky|" + (owner ?: "public")
             val appView = settings.appView
             val generation = feedGeneration
@@ -316,7 +327,37 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: 
                     }
                 }
             }
-            ReadingFeedList(vm, empty = if (f.kind == "timeline") "Follow some people to fill your timeline" else "Nothing here yet") { FeedRow(it, nav, following = f.kind == "timeline") }
+            ReadingFeedList(vm, bluesky = true, empty = if (f.kind == "timeline") "Follow some people to fill your timeline" else "Nothing here yet") { FeedRow(it, nav, following = f.kind == "timeline") }
+        }
+    }
+}
+
+@Composable
+private fun HiddenFollowsFeed(people: Map<String, String>, owner: String?, appView: String, nav: Nav) {
+    var selected by remember(owner) { mutableStateOf<String?>(null) }
+    val actor = selected?.takeIf { it in people } ?: people.keys.firstOrNull() ?: return
+    Column {
+        androidx.compose.material3.PrimaryScrollableTabRow(
+            selectedTabIndex = people.keys.indexOf(actor),
+            edgePadding = 12.dp,
+        ) {
+            people.forEach { (did, handle) ->
+                Tab(selected = actor == did, onClick = { selected = did }, text = { Text("@$handle", localise = false) })
+            }
+        }
+        val vm = viewModel(key = "hidden-follows-$owner-$appView-$actor") {
+            ReadingFeedVm(cache = null, active = { Graph.offline.owner() == owner && Graph.store.settings.value.appView == appView }) { cursor ->
+                Graph.atp.hiddenFollowFeed(actor, cursor)
+            }
+        }
+        androidx.compose.runtime.key(actor, owner, appView) {
+            ReadingFeedList(vm, bluesky = true, empty = "No public posts found", headerCount = 1, header = {
+                item {
+                    TextButton(onClick = { Graph.store.toggleHiddenFollow(actor, people.getValue(actor)) }) {
+                        Text("Remove hidden follow")
+                    }
+                }
+            }) { FeedRow(it, nav) }
         }
     }
 }
@@ -430,6 +471,14 @@ class SearchVm : ViewModel() {
 @Composable
 fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: SearchVm = viewModel()) {
     LaunchedEffect(initial) { if (initial != null && vm.query != initial) vm.search(initial) }
+    val settings by Graph.store.settings.collectAsState()
+    val prefs by Graph.store.moderation.collectAsState()
+    val signedIn = Graph.store.session.collectAsState().value != null
+    val posts = remember(vm.posts, settings.nsfwOnly, prefs, signedIn) {
+        if (!settings.nsfwOnly) vm.posts else vm.posts.filter {
+            Moderation.isNsfw(it) && Moderation.decide(it, prefs, signedIn) !is Moderation.Decision.Hide
+        }
+    }
     var tab by remember { mutableStateOf(0) }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -468,9 +517,9 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
                 (if (tab == 0) vm.loading else vm.peopleLoading) -> item { CenterLoading() }
                 tab == 0 && vm.error != null -> item { Message(vm.error!!, "Try again", vm::refreshPosts) }
                 tab == 1 && vm.peopleError != null -> item { Message(vm.peopleError!!) }
-                vm.searched && tab == 0 && vm.posts.isEmpty() -> item { Message("No posts found. Try another search.") }
+                vm.searched && tab == 0 && posts.isEmpty() -> item { Message(if (settings.nsfwOnly) "No NSFW posts on this page" else "No posts found. Try another search.") }
                 vm.searched && tab == 1 && vm.people.isEmpty() -> item { Message("No people found. Try another search.") }
-                tab == 0 -> items(vm.posts, key = { it.uri }) { PostCard(it, nav) }
+                tab == 0 -> items(posts, key = { it.uri }) { PostCard(it, nav) }
                 else -> items(vm.people) { a -> PersonRow(a) { nav.profile(a.did) } }
             }
             if (tab == 0 && vm.postCursor != null) item {
@@ -664,6 +713,17 @@ private fun ProfileHeader(p: Profile, nav: Nav, followed: String?, isMe: Boolean
             }
         }
         Column(Modifier.padding(horizontal = 16.dp)) {
+            if (!isMe && !TwitterParse.isTwitter(p.author.did)) {
+                val hiddenFollows by Graph.store.hiddenFollows.collectAsState()
+                val saved = p.author.did in hiddenFollows
+                TextButton(onClick = {
+                    Graph.store.toggleHiddenFollow(p.author.did, p.author.handle)
+                }) { Text(if (saved) "Remove hidden follow" else "Follow privately") }
+                if (saved) Text(
+                    "Saved on this device. No Bluesky follow or notification.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(p.author.name, localise = false, style = MaterialTheme.typography.headlineSmallEmphasized, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
                 VerifiedBadge(p.author, 22.dp)
@@ -755,7 +815,7 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
             )
         },
     ) { pad ->
-        ReadingFeedList(vm.current, Modifier.padding(top = pad.calculateTopPadding()), headerCount = 2, header = {
+        ReadingFeedList(vm.current, Modifier.padding(top = pad.calculateTopPadding()), bluesky = !twitter, headerCount = 2, header = {
             item(key = "header") {
                 val p = vm.profile
                 if (p == null) {

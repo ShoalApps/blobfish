@@ -62,6 +62,12 @@ object Moderation {
         else -> label
     }
 
+    private val nsfwLabels = (adultLabels + otherLabels).map { it.first }.toSet()
+
+    /** Match content labels on the post itself, independent of its author's profile labels. */
+    fun isNsfw(post: Post): Boolean =
+        post.labels.any { label -> canonical(label) in nsfwLabels }
+
     sealed interface Decision {
         data object Show : Decision
         /** Show the post, but cover its pictures until tapped. */

@@ -426,6 +426,10 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
     suspend fun authorFeed(actor: String, cursor: String? = null, filter: String = "posts_and_author_threads"): Page<FeedItem> =
         call("GET", "app.bsky.feed.getAuthorFeed", authorFeedParameters(actor, cursor, filter)).let(::feedPage)
 
+    suspend fun hiddenFollowFeed(actor: String, cursor: String?): Page<FeedItem> =
+        call("GET", "app.bsky.feed.getAuthorFeed", authorFeedParameters(actor, cursor, "posts_no_replies"), auth = false)
+            .let(::feedPage)
+
     suspend fun profile(actor: String): Profile = parseProfile(call("GET", "app.bsky.actor.getProfile", mapOf("actor" to actor)))
 
     suspend fun thread(uri: String): Thread {

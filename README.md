@@ -14,6 +14,9 @@ that take on your wallpaper's colours.
   and ~~strikethrough~~, alongside Bluesky's links, mentions and hashtags
 - Updates itself from GitHub releases (Android asks first)
 
+- **Hidden follows** save Bluesky profiles on this device and read their public posts without signing in to the feed request or creating a follow. Find them under Home → Hidden follows. Public reads still contact the feed provider.
+- **Show only NSFW posts** in Moderation filters Bluesky feeds and post search by content labels while retaining existing moderation rules.
+
 ## Getting the APK
 
 Every push to `main` builds a signed release. Install `Butterflyfish.apk` from the newest
