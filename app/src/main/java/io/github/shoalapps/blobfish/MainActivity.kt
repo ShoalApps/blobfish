@@ -119,7 +119,11 @@ class MainActivity : ComponentActivity() {
         Graph.checkForUpdate()
         setContent {
             val settings by Graph.store.settings.collectAsState()
-            SocialTheme(settings) { WhatsNew.Host(); Root(link.value) { link.value = null } }
+            SocialTheme(settings) {
+                WhatsNew.Host()
+                Root(link.value) { link.value = null }
+                io.github.shoalapps.blobfish.ui.BreakReminder(settings.breakReminderMinutes, onCloseApp = ::finish)
+            }
         }
     }
 

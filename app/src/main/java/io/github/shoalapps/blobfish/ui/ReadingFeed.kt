@@ -222,11 +222,18 @@ fun ReadingFeedList(vm: ReadingFeedVm, modifier: Modifier = Modifier, empty: Str
             if (!initialOnline && online) vm.refresh()
             initialOnline = false
         }
-        LaunchedEffect(vm.items.size, vm.loadingMore, vm.restoring, vm.refreshing, vm.pageError, state) {
-            if (filtered || vm.pageError != null) return@LaunchedEffect
+        LaunchedEffect(vm.items.size, vm.loadingMore, vm.restoring, vm.refreshing, vm.pageError, online, state) {
+            if (filtered || !online || vm.pageError != null) return@LaunchedEffect
             snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
                 .distinctUntilChanged().collect { last ->
                     if (!vm.refreshing && last >= 0 && last >= vm.items.size + headerCount - 6) vm.loadMore()
+                }
+        }
+        LaunchedEffect(filtered, rows.size, online, vm.restoring, vm.refreshing, vm.pageError, state) {
+            if (!filtered || !online || rows.isEmpty() || vm.pageError != null) return@LaunchedEffect
+            snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+                .distinctUntilChanged().collect { last ->
+                    if (!vm.refreshing && last >= 0 && last >= rows.size + headerCount - 6) vm.loadMore()
                 }
         }
         Column(modifier.fillMaxSize()) {

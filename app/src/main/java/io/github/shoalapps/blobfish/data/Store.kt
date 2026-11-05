@@ -19,6 +19,7 @@ data class Settings(
     val showReplies: Boolean = true,
     val autoUpdate: Boolean = true,
     val nsfwOnly: Boolean = false,
+    val breakReminderMinutes: Int = 0,
     /** Your X account in the account switcher (x.com, signed in on X's own login). */
     val showX: Boolean = true,
     /** Which account Butterflyfish is showing: "bluesky" or "x". */

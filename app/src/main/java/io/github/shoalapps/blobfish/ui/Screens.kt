@@ -479,7 +479,19 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             Moderation.isNsfw(it) && Moderation.decide(it, prefs, signedIn) !is Moderation.Decision.Hide
         }
     }
+    val listState = rememberLazyListState()
+    val online by Graph.offline.online.collectAsState()
     var tab by remember { mutableStateOf(0) }
+    val nearEnd by remember {
+        derivedStateOf {
+            val layout = listState.layoutInfo
+            val last = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= 0 && last >= layout.totalItemsCount - 5
+        }
+    }
+    LaunchedEffect(tab, nearEnd, posts.size, vm.loading, vm.pageError, online) {
+        if (tab == 0 && online && nearEnd && posts.isNotEmpty() && vm.pageError == null) vm.loadMorePosts()
+    }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -506,7 +518,7 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             }
         },
     ) { pad ->
-        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), state = listState, contentPadding = PaddingValues(bottom = 96.dp)) {
             if (tab == 0 && vm.searched) item {
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.material3.FilterChip(selected = !vm.latest, onClick = { vm.sortPosts(false) }, label = { Text("Top") })
@@ -1350,6 +1362,26 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 row { sh -> Toggle("Offline mode", "Use saved Bluesky views; account actions wait to sync", s.offlineMode, sh) { v -> store.updateSettings { it.copy(offlineMode = v) } } }
             }
             item(key = "app-language") { io.github.shoalapps.blobfish.AppLanguage.SettingsRow() }
+            group("Wellbeing") {
+                row { shapes ->
+                    Surface(shape = shapes.shape, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Break reminder", style = MaterialTheme.typography.bodyLarge)
+                            Text("Remind me to take a break after time spent in Butterflyfish.", style = MaterialTheme.typography.bodySmall)
+                            val intervals = listOf(0 to "Off", 15 to "15 min", 30 to "30 min", 60 to "60 min")
+                            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                                intervals.forEachIndexed { index, (minutes, label) ->
+                                    SegmentedButton(
+                                        selected = s.breakReminderMinutes == minutes,
+                                        onClick = { store.updateSettings { it.copy(breakReminderMinutes = minutes) } },
+                                        shape = SegmentedButtonDefaults.itemShape(index, intervals.size),
+                                    ) { Text(label) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             group("Appearance") {
                 row { sh ->
                     Surface(shape = sh.shape, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
