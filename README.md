@@ -45,3 +45,22 @@ Update `app/src/main/assets/whats-new.json` with each release. Notes ship with t
 ## App language
 
 The apps follow Android's system language by default, with an App language picker in Settings and right-to-left layout support. Translations are bundled and work offline. Coverage varies: many phrases are automatically translated, community catalogues may be partial, and missing strings fall back to British English. See `tools/README.md` and `app/src/main/assets/i18n/coverage.json` for maintenance and actual coverage.
+
+## Staying up to date
+
+Settings → **Staying up to date** shows the bundled Bluesky schema date and source commit,
+partial feature coverage, features still to add, and local counts of unrecognised type names.
+Unknown Bluesky embeds, feed reasons and facets keep the readable post and offer **Open on
+Bluesky**. Counts stay on the device, contain no post content, and are capped at 100 names per service.
+
+The six-hour Bluesky follower snapshots public `bluesky-social/atproto` lexicons, records its
+commit and `bluesky-social/social-app`'s commit, reports differences, and accepts updates only
+after the release build and JVM tests pass. A bot push explicitly dispatches the release workflow.
+New data can flow automatically; new screens and rendering still need building. New features
+are informational; removal of declared supported data fails validation. See
+[`compat/bluesky/REPORT.md`](compat/bluesky/REPORT.md) and the single **Bluesky changed: features to add** issue.
+
+X has no public client source: reading follows responses delivered to X's website. A daily
+watcher can record verified public API tracker commits and update one **X changes to check**
+issue; it never copies their code or automatically edits the app. X home feeds stay in session memory only; viewer name, handle
+and picture are cached privately and cleared on explicit X sign-out.

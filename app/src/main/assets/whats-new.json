@@ -1,5 +1,9 @@
 [
   {
+    "title": "Staying up to date",
+    "body": "A new Settings screen shows how closely Butterflyfish follows Bluesky and X, and what it can't show yet. Bluesky photo galleries now appear in posts, and anything else new gets a link to open it on Bluesky rather than vanishing. X shows your name, handle and picture, and its feed comes back instantly when you return to it."
+  },
+  {
     "title": "Your drafts stay put",
     "body": "Keep several new-post drafts and choose one from Drafts to carry on. Close the composer, or have Android close the app, and your words and pictures will be waiting when you come back. Each account keeps its own drafts, and each reply has one, until you post it or discard it. A Drafts button appears above the new post button whenever you have some, so replies are easy to find again. Reply drafts open offline now, too."
   },

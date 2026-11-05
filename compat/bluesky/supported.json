@@ -1,0 +1,130 @@
+{
+  "_note": "Hand-kept from Atp.kt / BlueskyParse.kt. True means at least partial rendering; fields enumerate what is read, not full support for every field. No claims about unobserved definitions. com.atproto.label.defs#label values are read generically (val/neg), not rendered as a union. Review against the first verified snapshot before enabling the follower.",
+  "lexicons": {
+    "app.bsky.feed.post": true,
+    "app.bsky.feed.defs": true,
+    "app.bsky.actor.defs": true,
+    "app.bsky.actor.profile": true,
+    "app.bsky.embed.images": true,
+    "app.bsky.embed.external": true,
+    "app.bsky.embed.video": true,
+    "app.bsky.embed.record": true,
+    "app.bsky.embed.recordWithMedia": true,
+    "app.bsky.richtext.facet": true,
+    "app.bsky.notification.listNotifications": true,
+    "app.bsky.feed.getFeed": true,
+    "app.bsky.feed.getTimeline": true,
+    "app.bsky.feed.getAuthorFeed": true,
+    "app.bsky.feed.getPostThread": true,
+    "app.bsky.feed.searchPosts": true,
+    "app.bsky.actor.getProfile": true,
+    "app.bsky.actor.searchActors": true,
+    "app.bsky.graph.getFollowers": true,
+    "app.bsky.graph.getFollows": true,
+    "app.bsky.actor.getPreferences": true,
+    "app.bsky.feed.getFeedGenerators": true,
+    "app.bsky.graph.getList": true,
+    "app.bsky.graph.getMutes": true,
+    "app.bsky.embed.gallery": true
+  },
+  "variants": {
+    "app.bsky.embed.images#view": true,
+    "app.bsky.embed.external#view": true,
+    "app.bsky.embed.video#view": true,
+    "app.bsky.embed.record#view": true,
+    "app.bsky.embed.recordWithMedia#view": true,
+    "app.bsky.embed.record#viewRecord": true,
+    "app.bsky.embed.record#viewNotFound": true,
+    "app.bsky.embed.record#viewBlocked": true,
+    "app.bsky.embed.record#viewDetached": true,
+    "app.bsky.feed.defs#reasonRepost": true,
+    "app.bsky.feed.defs#reasonPin": true,
+    "app.bsky.richtext.facet#link": true,
+    "app.bsky.richtext.facet#mention": true,
+    "app.bsky.richtext.facet#tag": true,
+    "app.bsky.feed.defs#blockedPost": false,
+    "app.bsky.feed.defs#notFoundPost": false,
+    "app.bsky.feed.defs#threadViewPost": true,
+    "app.bsky.feed.defs#blockedAuthor": false,
+    "app.bsky.actor.defs#adultContentPref": true,
+    "app.bsky.actor.defs#contentLabelPref": true,
+    "app.bsky.actor.defs#mutedWordsPref": true,
+    "app.bsky.actor.defs#hiddenPostsPref": true,
+    "app.bsky.actor.defs#feedViewPref": true,
+    "app.bsky.actor.defs#savedFeedsPrefV2": true,
+    "app.bsky.actor.defs#labelersPref": true,
+    "app.bsky.embed.gallery#view": true,
+    "app.bsky.embed.gallery#viewImage": true
+  },
+  "records": {
+    "app.bsky.feed.post#main.record": [
+      "text",
+      "facets",
+      "createdAt",
+      "reply",
+      "tags"
+    ],
+    "app.bsky.feed.defs#postView": [
+      "uri",
+      "cid",
+      "author",
+      "record",
+      "embed",
+      "replyCount",
+      "repostCount",
+      "likeCount",
+      "quoteCount",
+      "viewer",
+      "labels"
+    ],
+    "app.bsky.feed.defs#feedViewPost": [
+      "post",
+      "reply",
+      "reason"
+    ],
+    "app.bsky.embed.images#viewImage": [
+      "thumb",
+      "fullsize",
+      "alt",
+      "aspectRatio"
+    ],
+    "app.bsky.embed.external#viewExternal": [
+      "uri",
+      "title",
+      "description",
+      "thumb"
+    ],
+    "app.bsky.richtext.facet#main": [
+      "index",
+      "features"
+    ],
+    "app.bsky.richtext.facet#byteSlice": [
+      "byteStart",
+      "byteEnd"
+    ],
+    "app.bsky.richtext.facet#link": [
+      "uri"
+    ],
+    "app.bsky.richtext.facet#mention": [
+      "did"
+    ],
+    "app.bsky.richtext.facet#tag": [
+      "tag"
+    ],
+    "app.bsky.embed.video#view": [
+      "playlist",
+      "thumbnail",
+      "alt",
+      "aspectRatio"
+    ],
+    "app.bsky.feed.defs#reasonRepost": [
+      "by"
+    ],
+    "app.bsky.embed.gallery#viewImage": [
+      "thumbnail",
+      "fullsize",
+      "alt",
+      "aspectRatio"
+    ]
+  }
+}

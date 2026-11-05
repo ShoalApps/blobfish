@@ -1,0 +1,137 @@
+{
+  "date": "2026-11-05",
+  "upstreamCommit": "d4f2c919697d37af8f411f724e12b8ce2b88f922",
+  "features": [
+    {
+      "id": "app.bsky.embed.external#view",
+      "description": "A representation of some externally linked content (eg, a URL and 'card'), embedded in a Bluesky record (eg, a post).",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.external#viewArticle",
+      "description": "Article",
+      "rendered": false
+    },
+    {
+      "id": "app.bsky.embed.external#viewArticlePublication",
+      "description": "Article publication",
+      "rendered": false
+    },
+    {
+      "id": "app.bsky.embed.external#viewGallery",
+      "description": "Gallery",
+      "rendered": false
+    },
+    {
+      "id": "app.bsky.embed.external#viewGalleryImage",
+      "description": "Gallery image",
+      "rendered": false
+    },
+    {
+      "id": "app.bsky.embed.external#viewLivestream",
+      "description": "Livestream",
+      "rendered": false
+    },
+    {
+      "id": "app.bsky.embed.gallery#view",
+      "description": "An assortment of media embedded in a Bluesky record (eg, a post).",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.gallery#viewImage",
+      "description": "Image",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.images#view",
+      "description": "A set of images embedded in a Bluesky record (eg, a post).",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.record#view",
+      "description": "A representation of a record embedded in a Bluesky record (eg, a post). For example, a quote-post, or sharing a feed generator record.",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.record#viewBlocked",
+      "description": "Blocked",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.record#viewDetached",
+      "description": "Detached",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.record#viewNotFound",
+      "description": "Not found",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.record#viewRecord",
+      "description": "Record",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.recordWithMedia#view",
+      "description": "A representation of a record embedded in a Bluesky record (eg, a post), alongside other compatible embeds. For example, a quote post and image, or a quote post and external URL card.",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.embed.video#view",
+      "description": "A video embedded in a Bluesky record (eg, a post).",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.feed.defs#reasonPin",
+      "description": "Pin",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.feed.defs#reasonRepost",
+      "description": "Repost",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.richtext.facet#link",
+      "description": "Facet feature for a URL. The text URL may have been simplified or truncated, but the facet reference should be a complete URL.",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.richtext.facet#mention",
+      "description": "Facet feature for mention of another account. The text is usually a handle, including a '@' prefix, but the facet reference is a DID.",
+      "rendered": true
+    },
+    {
+      "id": "app.bsky.richtext.facet#tag",
+      "description": "Facet feature for a hashtag. The text usually includes a '#' prefix, but the facet reference should not (except in the case of 'double hash tags').",
+      "rendered": true
+    }
+  ],
+  "supportedVariants": [
+    "app.bsky.actor.defs#adultContentPref",
+    "app.bsky.actor.defs#contentLabelPref",
+    "app.bsky.actor.defs#feedViewPref",
+    "app.bsky.actor.defs#hiddenPostsPref",
+    "app.bsky.actor.defs#labelersPref",
+    "app.bsky.actor.defs#mutedWordsPref",
+    "app.bsky.actor.defs#savedFeedsPrefV2",
+    "app.bsky.embed.external#view",
+    "app.bsky.embed.gallery#view",
+    "app.bsky.embed.gallery#viewImage",
+    "app.bsky.embed.images#view",
+    "app.bsky.embed.record#view",
+    "app.bsky.embed.record#viewBlocked",
+    "app.bsky.embed.record#viewDetached",
+    "app.bsky.embed.record#viewNotFound",
+    "app.bsky.embed.record#viewRecord",
+    "app.bsky.embed.recordWithMedia#view",
+    "app.bsky.embed.video#view",
+    "app.bsky.feed.defs#reasonPin",
+    "app.bsky.feed.defs#reasonRepost",
+    "app.bsky.feed.defs#threadViewPost",
+    "app.bsky.richtext.facet#link",
+    "app.bsky.richtext.facet#mention",
+    "app.bsky.richtext.facet#tag"
+  ]
+}

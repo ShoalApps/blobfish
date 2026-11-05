@@ -22,7 +22,7 @@ import kotlinx.serialization.json.JsonObject
  * Twitter, read the way its website reads it. A hidden copy of the website (signed in with your
  * account, in [XView]) is steered to the page Butterflyfish needs; the data the website's own code then
  * receives is handed to Butterflyfish, which shows it in its own layout. Nothing is requested that the
- * website itself wouldn't request, so it keeps working however Twitter signs its requests.
+ * website itself wouldn't request, so it can follow changes in the website. X has no public client source, and changes may still need app work.
  */
 @OptIn(DelicateCoroutinesApi::class)
 object XBridge {
@@ -32,6 +32,7 @@ object XBridge {
     /** The latest response for each kind of request, for when the website answers from its cache. */
     private val latest = mutableMapOf<String, JsonObject>()
     private val latestAt = mutableMapOf<String, Long>()
+    @Volatile private var lastHomeOp: String? = null
 
     /** The [op] response that arrived in the last [maxAgeMs], if any (the website often loads several at once). */
     private fun fresh(op: String, maxAgeMs: Long): JsonObject? = synchronized(this) {
@@ -61,7 +62,13 @@ object XBridge {
         @JavascriptInterface fun onData(op: String, body: String) {
             if (io.github.shoalapps.blobfish.BuildConfig.DEBUG) android.util.Log.d("XBridge", "got $op (${body.length} chars)")
             val obj = runCatching { json.parseToJsonElement(body) as JsonObject }.getOrNull() ?: return
-            if (op == "AccountSettings") (obj["screen_name"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { me = it }
+            if (op == "AccountSettings" && XView.signedIn) TwitterParse.accountSettings(obj)?.let {
+                me = it.handle
+                XIdentity.remember(it)
+            }
+            if (op == "UserByScreenName" && XView.signedIn) TwitterParse.profile(obj)?.author?.takeIf {
+                it.handle.equals(me ?: XIdentity.author?.handle, ignoreCase = true)
+            }?.let(XIdentity::remember)
             synchronized(XBridge) {
                 latest[op] = obj
                 latestAt[op] = System.currentTimeMillis()
@@ -78,6 +85,7 @@ object XBridge {
 
     /** As above, for data the website has had several names for ([ops], any of them). */
     private suspend fun request(ops: List<String>, timeoutMs: Long = 25_000, cachedOk: Boolean = false, action: suspend (WebView) -> Unit): JsonObject = lock.withLock {
+        lastHomeOp = null
         val d = CompletableDeferred<JsonObject>()
         synchronized(this) { ops.forEach { waiting[it] = d } }
         val v = view()
@@ -95,8 +103,13 @@ object XBridge {
 
     /** Your home timeline: "For you", or "Following" (newest first). A non-null [cursor] means "more". */
     suspend fun home(following: Boolean, cursor: String?): Page<FeedItem> {
+        val started = android.os.SystemClock.elapsedRealtime()
         val op = if (following) "HomeLatestTimeline" else "HomeTimeline"
-        val root = request(op, cachedOk = true) { v ->
+        val onHome = withContext(Dispatchers.Main) {
+            view().url?.substringBefore('?')?.trimEnd('/') == "https://x.com/home"
+        }
+        // Reusing JSON must not leave pagination scrolling a profile or the other home tab.
+        val root = (if (cursor == null && onHome && lastHomeOp == op) fresh(op, 30_000) else null) ?: request(op, cachedOk = true) { v ->
             if (cursor != null) more(v)
             else {
                 // The website opens on whichever tab you last used, so press the one wanted.
@@ -105,7 +118,12 @@ object XBridge {
                 v.postDelayed({ v.evaluateJavascript("(function f(n){ const t = [...document.querySelectorAll('[role=tab]')].find(e => e.innerText.trim() === '$label'); if (t) { if (t.getAttribute('aria-selected') !== 'true') t.click(); } else if (n < 60) setTimeout(() => f(n + 1), 250); })(0)", null) }, 500)
             }
         }
-        return TwitterParse.timeline(root).let { if (it.items.isEmpty() && cursor != null) it.copy(cursor = null) else it }
+        lastHomeOp = op
+        return TwitterParse.timeline(root).let {
+            if (io.github.shoalapps.blobfish.BuildConfig.DEBUG && cursor == null)
+                android.util.Log.d("XTiming", "home parsed in ${android.os.SystemClock.elapsedRealtime() - started}ms (${it.items.size} items)")
+            if (it.items.isEmpty() && cursor != null) it.copy(cursor = null) else it
+        }
     }
 
     /** Someone's profile, by handle. */
@@ -182,10 +200,19 @@ object XBridge {
         private set
 
     /** Your own handle, from your account settings (which the website loads on every page). */
-    suspend fun myHandle(): String? = me ?: runCatching {
+    suspend fun myHandle(): String? = me ?: XIdentity.author?.handle ?: runCatching {
         request("AccountSettings", timeoutMs = 15_000, cachedOk = true) { v -> v.loadUrl("https://x.com/home") }
         me
     }.getOrNull()
+
+    /** Clear session-only answers and feeds on explicit X sign-out. No WebView recreation. */
+    fun clearAccount() {
+        me = null
+        lastHomeOp = null
+        synchronized(this) { latest.clear(); latestAt.clear(); waiting.values.forEach { it.cancel() }; waiting.clear() }
+        XFeeds.clear()
+        XIdentity.clear()
+    }
 
     /**
      * Presses a post's buttons on the website, as you would: like/unlike, repost/undo. [testIds]

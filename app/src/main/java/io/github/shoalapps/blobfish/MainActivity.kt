@@ -189,6 +189,14 @@ private fun Root(link: Uri?, onLinkHandled: () -> Unit) {
         onLinkHandled()
     }
     val settings by Graph.store.settings.collectAsState()
+    LaunchedEffect(Unit) {
+        // Compose's frame clock resumes on Main, after the initial frame has been scheduled.
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        // Only when X is what's open: someone reading Bluesky shouldn't pay for loading x.com.
+        if (settings.service == "x" && io.github.shoalapps.blobfish.ui.XView.signedIn)
+            io.github.shoalapps.blobfish.ui.XView.get(context)
+    }
     var switching by remember { mutableStateOf(false) }
     if (switching) io.github.shoalapps.blobfish.ui.AccountSwitcher(onDismiss = { switching = false }, onSignInBluesky = { Graph.store.updateSettings { it.copy(service = "bluesky") }; pendingRoute = "signin" })
     // Your X account: its website full screen, with a switcher back to Bluesky.

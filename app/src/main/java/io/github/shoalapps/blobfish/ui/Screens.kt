@@ -1136,6 +1136,12 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
     val store = Graph.store
     val s by store.settings.collectAsState()
     val session by store.session.collectAsState()
+    var compatibility by remember { mutableStateOf(false) }
+    if (compatibility) {
+        androidx.activity.compose.BackHandler { compatibility = false }
+        CompatibilityScreen { compatibility = false }
+        return
+    }
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?" }
     // Which server dialog is open: false = hosting provider, true = AppView.
     var servers by remember { mutableStateOf<Boolean?>(null) }
@@ -1154,12 +1160,25 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                     heartIcon = Icons.Rounded.Favorite,
                 ) { openLink(context, "https://liberapay.com/ShoalApps") }
             }
+            item(key = "compatibility") {
+                androidx.compose.material3.FilledTonalButton(onClick = { compatibility = true }, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Column { Text("Staying up to date"); Text("Bluesky schemas, X changes and features still to add", style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+            if (s.service == "x") item(key = "x-identity") { XAccountIdentity() }
             group("Account") {
-                val sess = session
-                if (sess != null) {
-                    row { sh -> Link("Signed in as @${sess.handle}", "Sign out of this account", sh) { store.setSession(null); io.github.shoalapps.blobfish.data.BskyOAuth.forgetKey() } }
+                if (s.service == "x") {
+                    row { sh -> Link(XIdentity.author?.let { "Signed in as @${it.handle}" } ?: "${XBrand.name} account", "Sign out of this account", sh) {
+                        XView.signOut()
+                        store.updateSettings { it.copy(service = "bluesky") }
+                    } }
                 } else {
-                    row { sh -> Link("Sign in to Bluesky", "Post, reply, like and see your timeline", sh, onSignIn) }
+                    val sess = session
+                    if (sess != null) {
+                        row { sh -> Link("Signed in as @${sess.handle}", "Sign out of this account", sh) { store.setSession(null); io.github.shoalapps.blobfish.data.BskyOAuth.forgetKey() } }
+                    } else {
+                        row { sh -> Link("Sign in to Bluesky", "Post, reply, like and see your timeline", sh, onSignIn) }
+                    }
                 }
             }
             item { OfflineStatus() }
@@ -1191,7 +1210,7 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
             group(XBrand.name) {
                 row { sh -> Toggle("Show my ${XBrand.name} account", "In the account switcher: x.com, signed in on its own page", s.showX, sh) { v -> store.updateSettings { it.copy(showX = v, service = if (!v) "bluesky" else it.service) } } }
                 row { sh -> Toggle("Call it Twitter", "Use Twitter's name and bird instead of X's", s.twitterNames, sh) { v -> store.updateSettings { it.copy(twitterNames = v) }; XView.rebrand() } }
-                if (s.showX && io.github.shoalapps.blobfish.ui.XView.signedIn) {
+                if (s.service != "x" && s.showX && io.github.shoalapps.blobfish.ui.XView.signedIn) {
                     row { sh -> Link("Sign out of ${XBrand.name}", null, sh) { io.github.shoalapps.blobfish.ui.XView.signOut() } }
                 }
             }
@@ -1199,7 +1218,8 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
                 row { sh -> Link("Hosting provider", if (s.server == io.github.shoalapps.blobfish.data.Settings.DEFAULT_SERVER) "Bluesky Social" else shortHost(s.server), sh) { servers = false } }
                 row { sh -> Link("AppView", if (s.appView.isBlank()) "Bluesky" else shortHost(s.appView), sh) { servers = true } }
             }
-            group("Moderation") {
+            // Moderation is Bluesky's, and its screen lives in the Bluesky side of the app.
+            if (s.service != "x") group("Moderation") {
                 row { sh -> Link("Moderation", "Content filters, muted words, hidden posts, muted accounts, replies and reposts", sh, onModeration) }
             }
             group("Updates") {

@@ -82,7 +82,7 @@ fun TwitterRoot(onSwitch: () -> Unit) {
                     NavigationBarItem(
                         selected = route == r || (route == null && r == "home"),
                         onClick = { nav.navigate(r) { popUpTo("home"); launchSingleTop = true } },
-                        icon = { Icon(if (route == r) icons.first else icons.second, null) }, label = { Text(label) },
+                        icon = { if (r == "you") AccountAvatar(XIdentity.author?.avatar, false, 26.dp) else Icon(if (route == r) icons.first else icons.second, null) }, label = { Text(label) },
                     )
                 }
             }
@@ -114,14 +114,20 @@ fun TwitterRoot(onSwitch: () -> Unit) {
 @Composable
 private fun TwitterHome(nav: Nav, onSwitch: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(0) }
+    var showSettings by remember { mutableStateOf(false) }
+    if (showSettings) {
+        androidx.activity.compose.BackHandler { showSettings = false }
+        SettingsScreen(onBack = { showSettings = false }, onSignIn = onSwitch, onModeration = onSwitch)
+        return
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             Column(Modifier.statusBarsPadding()) {
                 TopAppBar(
-                    title = { Text(XBrand.name, localise = false) },
-                    actions = { IconButton(onClick = onSwitch) { Icon(Icons.Rounded.SwitchAccount, "Switch account") } },
+                    title = { XAccountIdentity() },
+                    actions = { IconButton(onClick = { showSettings = true }) { Icon(Icons.Rounded.AccountCircle, "Settings") }; IconButton(onClick = onSwitch) { Icon(Icons.Rounded.SwitchAccount, "Switch account") } },
                     windowInsets = WindowInsets(0),
                 )
                 PrimaryTabRow(selectedTabIndex = tab) {
@@ -131,9 +137,13 @@ private fun TwitterHome(nav: Nav, onSwitch: () -> Unit) {
         },
     ) { pad ->
         // Each tab loads only once it's opened.
-        val vm = if (tab == 0) viewModel(key = "x-home") { PagedVm { c -> XBridge.home(following = false, cursor = c) } }
-            else viewModel(key = "x-following") { PagedVm { c -> XBridge.home(following = true, cursor = c) } }
-        PagedList(vm, Modifier.padding(top = pad.calculateTopPadding()), empty = "Nothing here yet") { item ->
+        val vm = remember(tab) { XFeeds.home(tab == 1) }
+        val opened = remember(vm) { android.os.SystemClock.elapsedRealtime() }
+        LaunchedEffect(vm.items.isNotEmpty()) {
+            if (vm.items.isNotEmpty() && io.github.shoalapps.blobfish.BuildConfig.DEBUG)
+                android.util.Log.d("XTiming", "first feed visible after ${android.os.SystemClock.elapsedRealtime() - opened}ms")
+        }
+        ReadingFeedList(vm, Modifier.padding(top = pad.calculateTopPadding()), empty = "Nothing here yet") { item ->
             PostCard(item.post, nav, repostedBy = item.repostedBy, replyTo = item.replyTo, pinned = item.pinned)
         }
     }
@@ -172,7 +182,7 @@ private fun TwitterComposer(replyTo: Post?, onDone: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = { if (!busy) onDone() },
-        title = { Text(if (replyTo != null) "Reply to @${replyTo.author.handle}" else "New post") },
+        title = { Column { XAccountIdentity(); Text(if (replyTo != null) "Reply to @${replyTo.author.handle}" else "New post") } },
         text = {
             if (replyTo != null) {
                 Text("Replies are temporarily unavailable here because they may be sent as new posts. Open the original post on Twitter to reply.")

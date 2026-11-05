@@ -1,0 +1,9 @@
+{
+  "uri": "at://did:plc:test/app.bsky.feed.post/one",
+  "cid": "cid",
+  "author": {
+    "did": "did:plc:test",
+    "handle": "test.example"
+  },
+  "record": []
+}

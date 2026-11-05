@@ -1,0 +1,43 @@
+{
+  "feed": [
+    {
+      "post": {
+        "uri": "at://did:plc:test/app.bsky.feed.post/one",
+        "cid": "cid",
+        "author": {
+          "did": "did:plc:test",
+          "handle": "test.example"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "Still readable",
+          "createdAt": "2026-01-01T00:00:00Z"
+        }
+      },
+      "reason": {
+        "$type": "app.bsky.feed.defs#reasonFuture"
+      }
+    },
+    {
+      "post": {
+        "record": []
+      }
+    },
+    "bad-entry",
+    {
+      "post": {
+        "uri": "at://did:plc:test/app.bsky.feed.post/one2",
+        "cid": "cid",
+        "author": {
+          "did": "did:plc:test",
+          "handle": "test.example"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "Still readable",
+          "createdAt": "2026-01-01T00:00:00Z"
+        }
+      }
+    }
+  ]
+}

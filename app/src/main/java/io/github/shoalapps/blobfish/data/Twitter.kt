@@ -15,6 +15,9 @@ import java.util.Locale
  * of the app can tell them from Bluesky's.
  */
 object TwitterParse {
+    /** X has no public client source; these shapes are observations of its website, not a stable API. */
+    var unknownType: (String) -> Unit = {}
+
     const val PREFIX = "x:"
 
     fun isTwitter(uriOrDid: String) = uriOrDid.startsWith(PREFIX)
@@ -27,6 +30,7 @@ object TwitterParse {
 
     /** A page of a timeline (home, a profile's posts, search), with ads left out. */
     fun timeline(root: JsonObject): Page<FeedItem> {
+        observeTypes(root)
         val pinnedIds = mutableSetOf<String>()
         val entries = instructions(root).flatMap { ins ->
             when (ins.str("type")) {
@@ -53,6 +57,7 @@ object TwitterParse {
 
     /** A post and its replies, from a post's page. */
     fun thread(root: JsonObject, focusId: String): Thread? {
+        observeTypes(root)
         val entries = instructions(root).filter { it.str("type") == "TimelineAddEntries" }.flatMap { it.arr("entries") }
         val posts = mutableListOf<Post>()
         val replies = mutableListOf<ThreadNode>()
@@ -61,7 +66,7 @@ object TwitterParse {
             content.obj("itemContent")?.let { tweet(it.obj("tweet_results")?.obj("result")) }?.let { posts += it }
             // Each reply thread is a module of posts, the first replying to the focused post.
             val chain = content.arr("items").mapNotNull { tweet(it.obj("item")?.obj("itemContent")?.obj("tweet_results")?.obj("result")) }
-            if (chain.isNotEmpty()) replies += chain.reversed().fold(null as ThreadNode?) { acc, p -> ThreadNode(p, listOfNotNull(acc)) }!!
+            chain.reversed().fold(null as ThreadNode?) { acc, p -> ThreadNode(p, listOfNotNull(acc)) }?.let { replies += it }
         }
         val focus = posts.firstOrNull { it.uri == PREFIX + focusId } ?: return null
         return Thread(posts.takeWhile { it.uri != focus.uri }, ThreadNode(focus, replies))
@@ -69,6 +74,7 @@ object TwitterParse {
 
     /** Someone's profile, from their profile page. */
     fun profile(root: JsonObject): Profile? {
+        observeTypes(root)
         val u = root.obj("data")?.obj("user")?.obj("result") ?: return null
         val a = author(u) ?: return null
         val legacy = u.obj("legacy")
@@ -103,7 +109,9 @@ object TwitterParse {
         return find(root, 0)?.mapNotNull { it as? JsonObject }.orEmpty()
     }
 
-    private fun feedItem(itemContent: JsonObject): FeedItem? {
+    private fun feedItem(itemContent: JsonObject): FeedItem? = try { feedItemValue(itemContent) } catch (_: Exception) { null }
+
+    private fun feedItemValue(itemContent: JsonObject): FeedItem? {
         if (itemContent.obj("promotedMetadata") != null) return null
         val result = itemContent.obj("tweet_results")?.obj("result") ?: return null
         val t = unwrap(result) ?: return null
@@ -123,7 +131,10 @@ object TwitterParse {
         else -> result
     }
 
-    fun tweet(result: JsonObject?): Post? {
+    fun tweet(result: JsonObject?): Post? = try { tweet(result, 0) } catch (_: Exception) { null }
+
+    private fun tweet(result: JsonObject?, depth: Int): Post? {
+        if (depth > 8) return null
         val t = result?.let(::unwrap) ?: return null
         val legacy = t.obj("legacy") ?: return null
         val id = t.str("rest_id") ?: legacy.str("id_str") ?: return null
@@ -140,7 +151,7 @@ object TwitterParse {
             val h = m.obj("original_info")?.int("height") ?: 0
             Image(thumb = "$url?name=small", full = if (m.str("type") == "photo") "$url?name=orig" else url, alt = m.str("ext_alt_text").orEmpty(), aspect = if (w > 0 && h > 0) w.toFloat() / h else null)
         }
-        val quote = t.obj("quoted_status_result")?.obj("result")?.let { tweet(it) }
+        val quote = t.obj("quoted_status_result")?.obj("result")?.let { tweet(it, depth + 1) }
         return Post(
             uri = PREFIX + id,
             cid = "",
@@ -228,6 +239,28 @@ object TwitterParse {
 
     private val dateFormat = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss Z yyyy", Locale.ENGLISH)
     internal fun parseDate(s: String): Instant? = runCatching { ZonedDateTime.parse(s, dateFormat).toInstant() }.getOrNull()
+
+    /** Bounded walk of names only, including unknown timeline modules that cannot produce a post. */
+    private fun observeTypes(root: JsonElement, depth: Int = 0) {
+        if (depth > 32) return
+        when (root) {
+            is JsonObject -> {
+                root.str("__typename")?.takeIf { it !in knownTypes }?.let(unknownType)
+                root.values.forEach { observeTypes(it, depth + 1) }
+            }
+            is JsonArray -> root.forEach { observeTypes(it, depth + 1) }
+            else -> Unit
+        }
+    }
+    private val knownTypes = setOf("Tweet", "User", "TweetWithVisibilityResults", "TweetTombstone", "TweetUnavailable",
+        "TimelineTimelineItem", "TimelineTimelineModule", "TimelineTimelineCursor", "TimelineTweet", "TimelineUser",
+        "TimelineAddEntries", "TimelinePinEntry")
+
+    /** The website's own account settings identify the viewer; never infer it from feed authors. */
+    fun accountSettings(root: JsonObject): Author? {
+        val handle = root.str("screen_name") ?: return null
+        return Author("x:@$handle", handle, root.str("name"), root.str("profile_image_url_https"))
+    }
 
     private fun JsonObject.obj(k: String) = this[k] as? JsonObject
     private fun JsonObject.arr(k: String): List<JsonObject> = (this[k] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()

@@ -298,6 +298,7 @@ fun PostCard(
                     post.card?.let { LinkCardView(it, Modifier.padding(top = 10.dp)) }
                 }
                 post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 10.dp)) }
+                CompatibilityNote(post)
                 Actions(post, nav)
             }
         }
@@ -378,6 +379,7 @@ fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
                 post.card?.let { LinkCardView(it, Modifier.padding(top = 12.dp)) }
             }
             post.quote?.let { q -> QuoteCard(q, nav, Modifier.padding(top = 12.dp)) }
+            CompatibilityNote(post)
         }
         Text(
             post.createdAt?.let { fullDate(it) }.orEmpty(),
@@ -430,6 +432,7 @@ fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
             if (quoteDecision is Moderation.Decision.Warn) Text("Content warning: ${quoteDecision.reason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             else {
                 RichTextView(q.text, q.facets, nav, maxLines = 6)
+                CompatibilityNote(q)
                 if (quoteDecision is Moderation.Decision.BlurMedia) Text("Media hidden by content warning", style = MaterialTheme.typography.bodyMedium)
                 else {
                     PostMedia(q, Modifier.padding(top = 8.dp))
@@ -647,5 +650,16 @@ fun Message(text: String, action: String? = null, onAction: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (action != null) androidx.compose.material3.FilledTonalButton(onClick = onAction, modifier = Modifier.padding(top = 12.dp)) { Text(action) }
+    }
+}
+
+/** Keep the usable parts visible and provide an escape hatch for unsupported Bluesky data. */
+@Composable
+private fun CompatibilityNote(post: Post) {
+    if (post.unsupportedTypes.isEmpty()) return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(Modifier.padding(top = 6.dp)) {
+        Text("This post has something Butterflyfish can't show yet", style = MaterialTheme.typography.bodySmall)
+        androidx.compose.material3.TextButton(onClick = { openLink(context, webUrl(post)) }) { Text("Open on Bluesky") }
     }
 }

@@ -7,7 +7,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -91,6 +90,7 @@ data class Post(
     /** Hashtags, from the text and the post's extra tags; muted words check these. */
     val tags: List<String> = emptyList(),
     val media: List<PlayableMedia> = emptyList(),
+    val unsupportedTypes: List<String> = emptyList(),
 ) {
     val hasMedia get() = images.isNotEmpty() || media.isNotEmpty() || card != null
 }
@@ -176,7 +176,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         val s = if (auth) requestSession else null
         if (expectedOwner != null && s?.let { it.did + "|" + it.pds } != expectedOwner)
             throw AtpException(401, "This saved action belongs to another account")
-        if (body?.get("repo") != null && body["repo"]?.jsonPrimitive?.content != s?.did)
+        if (body?.get("repo") != null && body.str("repo") != s?.did)
             throw AtpException(401, "This saved action belongs to a different account")
         val host = s?.pds ?: if (method == "GET") requestAppView.ifBlank { Settings.BLUESKY_APPVIEW } else store.settings.value.server
         val url = "$host/xrpc/$nsid".toHttpUrl().newBuilder().apply {
@@ -429,7 +429,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         val parents = mutableListOf<Post>()
         var p = t["parent"].obj
         while (p != null && p["post"] != null) {
-            parsePost(p["post"].obj!!)?.let { parents.add(0, it) }
+            p["post"].obj?.let(::parsePost)?.let { parents.add(0, it) }
             p = p["parent"].obj
         }
         return Thread(parents, parseNode(t) ?: throw AtpException(404, "Post not found"))
@@ -612,48 +612,16 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
 
     // ---- Parsing ----
 
-    private fun feedPage(o: JsonObject): Page<FeedItem> {
-        val items = (o["feed"] as? JsonArray).orEmpty().mapNotNull { e ->
-            val f = e.obj ?: return@mapNotNull null
-            val post = f["post"].obj?.let(::parsePost) ?: return@mapNotNull null
-            val reason = f["reason"].obj
-            val by = if (reason.str("\$type")?.endsWith("reasonRepost") == true) reason!!["by"].obj?.let(::parseAuthor) else null
-            val parentObj = f["reply"].obj?.get("parent").obj
-            val replyTo = parentObj?.get("author").obj?.let(::parseAuthor)
-            // Reposted replies show without their parent, as in Bluesky.
-            val parent = if (by == null) parentObj?.let(::parsePost) else null
-            FeedItem(post, by, replyTo, parent, pinned = reason.str("\$type")?.endsWith("reasonPin") == true)
-        }
-        return Page(items, o.str("cursor"))
-    }
-
-    fun parseAuthor(o: JsonObject): Author? {
-        val did = o.str("did") ?: return null
-        val viewer = o["viewer"].obj
-        return Author(
-            did, o.str("handle") ?: did, o.str("displayName"), o.str("avatar"),
-            labels = labelsOf(o),
-            muted = viewer?.get("muted")?.let { (it as? JsonPrimitive)?.content == "true" } == true,
-            blocking = viewer.str("blocking") != null,
-            blockedBy = viewer?.get("blockedBy")?.let { (it as? JsonPrimitive)?.content == "true" } == true,
-            following = Graph.offline.recordState("app.bsky.graph.follow", did, viewer.str("following")) != null,
-            verified = o["verification"].obj.str("verifiedStatus") == "valid",
-            verifier = o["verification"].obj.str("trustedVerifierStatus") == "valid",
-            pronouns = o.str("pronouns")?.takeIf { it.isNotBlank() },
-            followedBy = viewer.str("followedBy") != null,
-            followUri = Graph.offline.recordState("app.bsky.graph.follow", did, viewer.str("following")),
-            description = o.str("description")?.trim()?.takeIf { it.isNotEmpty() },
-        )
-    }
-
-    /** Label values on a post or account, leaving out negations (labels that were taken back). */
-    private fun labelsOf(o: JsonObject): List<String> = (o["labels"] as? JsonArray).orEmpty().mapNotNull { l ->
-        val label = l.obj ?: return@mapNotNull null
-        if ((label["neg"] as? JsonPrimitive)?.content == "true") null else label.str("val")
-    }
+    private val parser = BlueskyParse(
+        recordState = { collection, uri, value -> Graph.offline.recordState(collection, uri, value) },
+        unknown = { CompatibilityRuntime.bluesky.record(it) },
+    )
+    private fun feedPage(o: JsonObject) = parser.feedPage(o)
+    fun parseAuthor(o: JsonObject) = parser.parseAuthor(o)
+    fun parsePost(o: JsonObject) = parser.parsePost(o)
 
     private fun parseProfile(o: JsonObject) = Profile(
-        author = parseAuthor(o)!!,
+        author = parseAuthor(o) ?: throw AtpException(502, "Bluesky returned an incomplete profile"),
         description = o.str("description"),
         banner = o.str("banner"),
         followers = o.int("followersCount"),
@@ -671,83 +639,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         followsYou = o["viewer"].obj.str("followedBy") != null,
     )
 
-    fun parsePost(o: JsonObject): Post? {
-        val record = o["record"].obj ?: return null
-        val author = o["author"].obj?.let(::parseAuthor) ?: return null
-        val embed = o["embed"].obj
-        return Post(
-            uri = o.str("uri") ?: return null,
-            cid = o.str("cid") ?: return null,
-            author = author,
-            text = record.str("text").orEmpty(),
-            facets = parseFacets(record["facets"]),
-            createdAt = record.str("createdAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
-            replyCount = o.int("replyCount"),
-            repostCount = o.int("repostCount"),
-            likeCount = o.int("likeCount"),
-            quoteCount = o.int("quoteCount"),
-            images = images(embed),
-            media = MediaParsing.bluesky(embed),
-            card = card(embed),
-            quote = quote(embed),
-            myLike = Graph.offline.recordState("app.bsky.feed.like", o.str("uri").orEmpty(), o["viewer"].obj.str("like")),
-            myRepost = Graph.offline.recordState("app.bsky.feed.repost", o.str("uri").orEmpty(), o["viewer"].obj.str("repost")),
-            replyRoot = record["reply"].obj?.get("root").obj?.let { r -> Ref(r.str("uri") ?: return@let null, r.str("cid") ?: return@let null) },
-            labels = labelsOf(o),
-            tags = parseFacets(record["facets"]).filter { it.kind == RichText.Facet.Kind.TAG }.map { it.value } +
-                (record["tags"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
-        )
-    }
 
-    private fun parseFacets(e: JsonElement?): List<RichText.Facet> = (e as? JsonArray).orEmpty().flatMap { f ->
-        val o = f.obj ?: return@flatMap emptyList()
-        val s = o["index"].obj.int("byteStart"); val end = o["index"].obj.int("byteEnd")
-        (o["features"] as? JsonArray).orEmpty().mapNotNull { feat ->
-            val t = feat.obj.str("\$type") ?: return@mapNotNull null
-            when {
-                t.endsWith("#link") -> RichText.Facet(s, end, RichText.Facet.Kind.LINK, feat.obj.str("uri") ?: return@mapNotNull null)
-                t.endsWith("#mention") -> RichText.Facet(s, end, RichText.Facet.Kind.MENTION, feat.obj.str("did") ?: return@mapNotNull null)
-                t.endsWith("#tag") -> RichText.Facet(s, end, RichText.Facet.Kind.TAG, feat.obj.str("tag") ?: return@mapNotNull null)
-                else -> null
-            }
-        }
-    }
-
-    private fun media(embed: JsonObject?): JsonObject? = embed?.get("media").obj ?: embed
-
-    private fun images(embed: JsonObject?): List<Image> = (media(embed)?.get("images") as? JsonArray).orEmpty().mapNotNull { e ->
-        val i = e.obj ?: return@mapNotNull null
-        val ar = i["aspectRatio"].obj
-        Image(
-            i.str("thumb") ?: return@mapNotNull null,
-            i.str("fullsize") ?: i.str("thumb")!!,
-            i.str("alt").orEmpty(),
-            ar?.let { a -> a.int("width").toFloat() / a.int("height").coerceAtLeast(1) },
-        )
-    }
-
-    private fun card(embed: JsonObject?): LinkCard? {
-        val ext = media(embed)?.get("external").obj ?: return null
-        return LinkCard(ext.str("uri") ?: return null, ext.str("title").orEmpty(), ext.str("description").orEmpty(), ext.str("thumb"))
-    }
-
-    private fun quote(embed: JsonObject?): Post? {
-        val rec = (embed?.get("record").obj?.let { it["record"].obj ?: it }) ?: return null
-        if (rec.str("\$type")?.endsWith("viewRecord") != true) return null
-        val author = rec["author"].obj?.let(::parseAuthor) ?: return null
-        val value = rec["value"].obj ?: return null
-        return Post(
-            uri = rec.str("uri") ?: return null, cid = rec.str("cid") ?: return null, author = author,
-            text = value.str("text").orEmpty(), facets = parseFacets(value["facets"]),
-            createdAt = value.str("createdAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
-            replyCount = 0, repostCount = 0, likeCount = 0,
-            images = images((rec["embeds"] as? JsonArray)?.firstOrNull()?.obj),
-            media = MediaParsing.bluesky((rec["embeds"] as? JsonArray)?.firstOrNull()?.obj),
-            card = card((rec["embeds"] as? JsonArray)?.firstOrNull()?.obj), quote = null,
-            labels = labelsOf(rec),
-            myLike = null, myRepost = null, replyRoot = null,
-        )
-    }
 }
 
 // Forgiving JSON helpers.

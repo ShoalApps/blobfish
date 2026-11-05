@@ -29,6 +29,13 @@ import androidx.compose.ui.viewinterop.AndroidView
  */
 object XView {
     private var view: WebView? = null
+    @Volatile private var visibleSignIn = false
+
+    /** Only media hosts, only while hidden; HTML, scripts and JSON are unaffected. */
+    private fun hiddenMedia(request: WebResourceRequest): Boolean {
+        val host = request.url.host.orEmpty().lowercase()
+        return !visibleSignIn && host in setOf("pbs.twimg.com", "video.twimg.com")
+    }
     private val hosts = listOf("x.com", "twitter.com", "twimg.com", "t.co", "abs.twimg.com")
     private fun owns(host: String) = hosts.any { host == it || host.endsWith(".$it") }
 
@@ -56,6 +63,10 @@ object XView {
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
         webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? =
+                if (hiddenMedia(request)) android.webkit.WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(byteArrayOf()))
+                else super.shouldInterceptRequest(view, request)
+
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 if (uri.scheme == "https" && owns(uri.host.orEmpty())) return false
@@ -68,7 +79,10 @@ object XView {
                 return true
             }
 
-            override fun onPageFinished(view: WebView, url: String?) { CookieManager.getInstance().flush() }
+            override fun onPageFinished(view: WebView, url: String?) {
+                CookieManager.getInstance().flush()
+                if (signedIn && url?.startsWith("https://x.com/") == true) view.evaluateJavascript(XIdentity.READ_VIEWER) { XIdentity.fromPage(it) }
+            }
         }
         webChromeClient = WebChromeClient()
         // Hands the website's own data to Butterflyfish (see XBridge).
@@ -84,6 +98,8 @@ object XView {
         loadUrl("https://x.com/home")
         view = this
     }
+
+    fun showSignIn(show: Boolean) { visibleSignIn = show }
 
     fun open(context: Context, url: String) = get(context).loadUrl(url)
 
@@ -124,6 +140,7 @@ object XView {
     val signedIn: Boolean get() = CookieManager.getInstance().getCookie("https://x.com")?.contains("auth_token=") == true
 
     fun signOut() {
+        XBridge.clearAccount()
         val cm = CookieManager.getInstance()
         cm.getCookie("https://x.com")?.split(';')?.map { it.substringBefore('=').trim() }?.forEach { name ->
             cm.setCookie("https://x.com", "$name=; Max-Age=0; Path=/; Domain=.x.com")
@@ -136,7 +153,7 @@ object XView {
 @Composable
 fun XScreen() {
     val context = LocalContext.current
-    val web = remember { XView.get(context) }
+    val web = remember { XView.showSignIn(true); XView.get(context) }
     var canGoBack by remember { mutableStateOf(false) }
     BackHandler(enabled = canGoBack) { web.goBack() }
     DisposableEffect(Unit) {
@@ -168,7 +185,7 @@ fun XScreen() {
 @Composable
 fun XHidden(modifier: Modifier) {
     val context = LocalContext.current
-    val web = remember { XView.get(context) }
+    val web = remember { XView.showSignIn(false); XView.get(context) }
     DisposableEffect(Unit) { web.onResume(); onDispose { } }
     AndroidView(
         factory = { ctx ->

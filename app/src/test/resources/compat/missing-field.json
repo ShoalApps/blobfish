@@ -1,0 +1,9 @@
+{
+  "uri": "at://did:plc:test/app.bsky.feed.post/one",
+  "cid": "cid",
+  "record": {
+    "$type": "app.bsky.feed.post",
+    "text": "Still readable",
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+}

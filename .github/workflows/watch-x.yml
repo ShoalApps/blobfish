@@ -1,0 +1,31 @@
+name: Watch public X API trackers
+on:
+  schedule:
+    - cron: '41 7 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: compatibility-main
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Record upstream commits and update one review issue
+        run: python3 tools/follow-compat.py x
+      - name: Commit observations only
+        run: |
+          if ! git diff --quiet -- compat/x/upstream.json; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add compat/x/upstream.json
+            git commit -m 'Record public X tracker upstream commits'
+            git push origin HEAD:main
+          fi

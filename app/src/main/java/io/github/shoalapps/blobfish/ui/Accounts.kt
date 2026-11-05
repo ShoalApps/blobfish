@@ -73,8 +73,7 @@ fun ServiceLogo(logo: Int, colour: Color, size: Dp, modifier: Modifier = Modifie
 @Composable
 fun AccountAvatar(avatar: String?, bluesky: Boolean, size: Dp, modifier: Modifier = Modifier) {
     Box(modifier.size(size)) {
-        if (bluesky) Avatar(avatar, size)
-        else ServiceLogo(XBrand.logo, XBrand.colour, size)
+        Avatar(avatar, size)
         if (bluesky || avatar != null) {
             ServiceLogo(
                 if (bluesky) R.drawable.logo_bluesky else XBrand.logo, if (bluesky) BlueskyBlue else XBrand.colour, size * 0.42f,
@@ -104,9 +103,9 @@ fun AccountSwitcher(onDismiss: () -> Unit, onSignInBluesky: () -> Unit) {
                 current = settings.service != "x",
             ) { if (s == null) { onDismiss(); onSignInBluesky() } else use("bluesky") }
             if (settings.showX) AccountRow(
-                avatar = { AccountAvatar(null, bluesky = false, size = 48.dp) },
-                title = XBrand.name,
-                subtitle = if (XView.signedIn) "Signed in on ${XBrand.name}'s own page" else "Sign in on ${XBrand.name}'s own page",
+                avatar = { AccountAvatar(XIdentity.author?.avatar, bluesky = false, size = 48.dp) },
+                title = XIdentity.author?.name ?: XBrand.name,
+                subtitle = XIdentity.author?.let { "@${it.handle} · ${XBrand.name}" } ?: if (XView.signedIn) "Account details not available yet" else "Sign in on ${XBrand.name}'s own page",
                 current = settings.service == "x",
             ) { use("x") }
             if (s == null) Row(
@@ -169,6 +168,12 @@ private fun SwitchRow(title: String, body: String, checked: Boolean, onChange: (
 @Composable
 fun XAccountScreen(onSwitch: () -> Unit) {
     var signedIn by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(XView.signedIn) }
+    var firstFramePlaced by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        firstFramePlaced = true
+    }
     // Signing in happens on the website; check now and then until it's done.
     androidx.compose.runtime.LaunchedEffect(signedIn) {
         while (!signedIn) { kotlinx.coroutines.delay(1000); signedIn = XView.signedIn }
@@ -179,6 +184,8 @@ fun XAccountScreen(onSwitch: () -> Unit) {
             SwitchButton(onSwitch, Modifier.align(Alignment.TopEnd))
             return@Box
         }
+        // Keep hidden WebView creation off the initial frame; the singleton and its lifecycle are unchanged.
+        if (!firstFramePlaced) { CenterLoading(); return@Box }
         // The website, laid out (its lists load as they're scrolled) but invisible, behind everything.
         XHidden(Modifier.fillMaxSize().androidx_alpha0())
         TwitterRoot(onSwitch)

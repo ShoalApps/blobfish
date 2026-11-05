@@ -1,0 +1,45 @@
+{
+  "instructions": [
+    {
+      "type": "TimelineAddEntries",
+      "entries": [
+        {
+          "content": {
+            "itemContent": {
+              "tweet_results": {
+                "result": []
+              }
+            }
+          }
+        },
+        {
+          "content": {
+            "itemContent": {
+              "__typename": "FutureModule",
+              "secret": "never counted",
+              "tweet_results": {
+                "result": {
+                  "__typename": "Tweet",
+                  "rest_id": "1",
+                  "legacy": {
+                    "full_text": "Good"
+                  },
+                  "core": {
+                    "user_results": {
+                      "result": {
+                        "rest_id": "u",
+                        "core": {
+                          "screen_name": "sam"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

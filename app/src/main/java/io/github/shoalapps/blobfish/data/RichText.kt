@@ -93,7 +93,7 @@ object RichText {
                 val r = m.range
                 if ((r.first..r.last).any { taken[it] }) continue
                 if (local.any { it.start < r.last + 1 && it.end > r.first }) continue
-                val inner = m.groups[1]!!.range
+                val inner = m.groups[1]?.range ?: continue
                 for (i in r.first until inner.first) removed[i] = true
                 for (i in inner.last + 1..r.last) removed[i] = true
                 for (i in r) taken[i] = true

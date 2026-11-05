@@ -16,6 +16,10 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Validate Bluesky compatibility
+        run: |
+          python3 -m unittest discover -s tools/tests
+          python3 tools/check-bluesky-compat.py
       - name: Validate translation catalogues
         run: python3 tools/check-locales.py
       - name: Build app and UI tests; run unit tests

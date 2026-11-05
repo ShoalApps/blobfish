@@ -31,6 +31,8 @@ class SocialApp : Application(), SingletonImageLoader.Factory {
         Telemetry.init(this)
         DataMover.run(this)
         Graph.app = this
+        io.github.shoalapps.blobfish.data.CompatibilityRuntime.init(this)
+        io.github.shoalapps.blobfish.ui.XIdentity.init(this)
         Graph.offline.init()
         Graph.syncModeration()
         Graph.syncProfile()
