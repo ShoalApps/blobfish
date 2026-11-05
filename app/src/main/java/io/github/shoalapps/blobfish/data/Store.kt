@@ -58,7 +58,19 @@ class Store(context: Context) {
         prefs.edit().putString("settings", json.encodeToString(Settings.serializer(), _settings.value)).apply()
     }
 
-    fun setSession(s: Session?) {
+    private val _feedGeneration = MutableStateFlow(0)
+    val feedGeneration: StateFlow<Int> = _feedGeneration
+
+    /** Invalidates retained view models and pending writes when an account changes. */
+    @Synchronized fun setSession(s: Session?) {
+        val previous = _session.value
+        if (previous?.let { it.did + "|" + it.pds } != s?.let { it.did + "|" + it.pds }) {
+            _feedGeneration.value += 1
+            if (s == null && previous != null) {
+                val owner = "bluesky|" + previous.did + "|" + previous.pds
+                clearFeedAnchors(owner, waitForDisk = false)
+            }
+        }
         _session.value = s
         io.github.shoalapps.blobfish.Graph.offline.changed()
         if (s == null) { prefs.edit().remove("session").apply(); setModeration(Moderation.Prefs()) }
@@ -85,6 +97,22 @@ class Store(context: Context) {
     fun setModeration(p: Moderation.Prefs) {
         _moderation.value = p
         prefs.edit().putString("moderation", json.encodeToString(Moderation.Prefs.serializer(), p)).apply()
+    }
+
+    // Called on Dispatchers.IO. Commit completes before the background save finishes.
+    @Synchronized fun feedAnchor(owner: String, feed: String): FeedAnchor? =
+        FeedReading.decode(prefs.getString("feedAnchors", null)).firstOrNull { it.owner == owner && it.feed == feed }
+
+    @Synchronized fun saveFeedAnchor(anchor: FeedAnchor, valid: () -> Boolean = { true }) {
+        if (!valid()) return
+        val anchors = FeedReading.save(FeedReading.decode(prefs.getString("feedAnchors", null)), anchor)
+        prefs.edit().putString("feedAnchors", FeedReading.encode(anchors)).commit()
+    }
+
+    @Synchronized fun clearFeedAnchors(owner: String, waitForDisk: Boolean = true) {
+        val anchors = FeedReading.decode(prefs.getString("feedAnchors", null)).filterNot { it.owner == owner }
+        val edit = prefs.edit().putString("feedAnchors", FeedReading.encode(anchors))
+        if (waitForDisk) edit.commit() else edit.apply()
     }
 
     var lastUpdateCheck: Long

@@ -23,6 +23,7 @@ import java.time.Instant
 
 // ---------------- Models ----------------
 
+@kotlinx.serialization.Serializable
 data class Author(
     val did: String,
     val handle: String,
@@ -49,10 +50,14 @@ data class Author(
     val name get() = displayName?.takeIf { it.isNotBlank() } ?: handle
 }
 
+@kotlinx.serialization.Serializable
 data class Image(val thumb: String, val full: String, val alt: String, val aspect: Float?)
+@kotlinx.serialization.Serializable
 data class LinkCard(val uri: String, val title: String, val description: String, val thumb: String?)
 
+@kotlinx.serialization.Serializable
 data class MediaSource(val url: String, val mimeType: String, val bitrate: Long = 0)
+@kotlinx.serialization.Serializable
 data class PlayableMedia(val sources: List<MediaSource>, val thumbnail: String?, val alt: String, val aspect: Float?, val audio: Boolean = false, val loop: Boolean = false) {
     fun source(metered: Boolean, dataSaver: Boolean): MediaSource? {
         sources.firstOrNull { it.mimeType.contains("mpegurl", ignoreCase = true) }?.let { return it }
@@ -61,12 +66,14 @@ data class PlayableMedia(val sources: List<MediaSource>, val thumbnail: String?,
     }
 }
 
+@kotlinx.serialization.Serializable
 data class Post(
     val uri: String,
     val cid: String,
     val author: Author,
     val text: String,
     val facets: List<RichText.Facet>,
+    @kotlinx.serialization.Serializable(with = FeedInstantSerializer::class)
     val createdAt: Instant?,
     val replyCount: Int,
     val repostCount: Int,
@@ -88,8 +95,10 @@ data class Post(
     val hasMedia get() = images.isNotEmpty() || media.isNotEmpty() || card != null
 }
 
+@kotlinx.serialization.Serializable
 data class Ref(val uri: String, val cid: String)
 
+@kotlinx.serialization.Serializable
 data class FeedItem(
     val post: Post,
     val repostedBy: Author?,
@@ -136,9 +145,6 @@ class AtpException(val status: Int, message: String) : Exception(message)
  */
 class Atp(private val http: OkHttpClient, private val store: Store) {
     private val json = Json { ignoreUnknownKeys = true }
-    /** Where signed-out reads go: your chosen AppView, or Bluesky's. */
-    private val publicHost get() = store.settings.value.appView.ifBlank { Settings.BLUESKY_APPVIEW }
-
     /** Bluesky's own "Discover" feed. */
     private val MANY = "\u0000"
     val discoverFeed = "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/whats-hot"
@@ -160,15 +166,19 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             Graph.offline.enqueue(nsid, body ?: JsonObject(emptyMap()))
             return@withContext JsonObject(emptyMap())
         }
-        val namespace = (Graph.offline.owner() ?: "public") + "|" + store.settings.value.appView
+        // Capture account and AppView together for this response's cache namespace. An account
+        // switch during the request must never put the new account's posts in the old one's cache.
+        val requestSession = session
+        val requestAppView = store.settings.value.appView
+        val namespace = (requestSession?.let { it.did + "|" + it.pds } ?: "public") + "|" + requestAppView
         val cacheKey = nsid + params.toSortedMap().toString()
         if (method == "GET" && !Graph.offline.available()) return@withContext Graph.offline.cached(cacheKey, namespace)
-        val s = if (auth) session else null
+        val s = if (auth) requestSession else null
         if (expectedOwner != null && s?.let { it.did + "|" + it.pds } != expectedOwner)
             throw AtpException(401, "This saved action belongs to another account")
         if (body?.get("repo") != null && body["repo"]?.jsonPrimitive?.content != s?.did)
             throw AtpException(401, "This saved action belongs to a different account")
-        val host = s?.pds ?: if (method == "GET") publicHost else store.settings.value.server
+        val host = s?.pds ?: if (method == "GET") requestAppView.ifBlank { Settings.BLUESKY_APPVIEW } else store.settings.value.server
         val url = "$host/xrpc/$nsid".toHttpUrl().newBuilder().apply {
             // A value holding several values (joined with MANY) becomes the parameter repeated.
             params.forEach { (k, v) -> v?.split(MANY)?.forEach { addQueryParameter(k, it) } }
@@ -181,7 +191,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
             // Labels are only included from labelers the request names: Bluesky's own, plus yours.
             header("atproto-accept-labelers", (listOf("${Moderation.BLUESKY_LABELER};redact") + store.moderation.value.labelers).joinToString(", "))
             // A chosen AppView: your server forwards Bluesky calls there instead of to Bluesky's.
-            val appView = store.settings.value.appView
+            val appView = requestAppView
             if (s != null && appView.isNotBlank() && nsid.startsWith("app.bsky.")) header("atproto-proxy", "did:web:${appView.toHttpUrl().host}#bsky_appview")
             if (method == "POST") post((body ?: JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
         }.build()

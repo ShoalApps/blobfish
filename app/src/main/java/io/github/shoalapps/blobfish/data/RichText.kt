@@ -19,6 +19,7 @@ object RichText {
     data class Tag(override val start: Int, override val end: Int, val tag: String) : Span
 
     /** A facet as Bluesky stores it: a UTF-8 byte range and what it points to. */
+    @kotlinx.serialization.Serializable
     data class Facet(val byteStart: Int, val byteEnd: Int, val kind: Kind, val value: String) {
         enum class Kind { LINK, MENTION, TAG }
     }

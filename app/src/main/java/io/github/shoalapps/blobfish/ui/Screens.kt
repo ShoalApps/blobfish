@@ -226,11 +226,14 @@ private fun FeedRow(item: FeedItem, nav: Nav, following: Boolean = false) {
 @Composable
 fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: () -> Unit) {
     val session by Graph.store.session.collectAsState()
+    val feedGeneration by Graph.store.feedGeneration.collectAsState()
+    val settings by Graph.store.settings.collectAsState()
     val draftChanges by Graph.drafts.changes.collectAsState()
     val owner = session?.let { it.did + "|" + it.pds }
     val hasDrafts = remember(owner, draftChanges) { owner?.let { Graph.drafts.list(it).isNotEmpty() } == true }
     // Your pinned feeds as tabs, in the order you set in Bluesky, like Bluesky's home.
-    val feeds by produceState(listOf(io.github.shoalapps.blobfish.data.Atp.PinnedFeed("feed", Graph.atp.discoverFeed, "Discover")), session?.did) {
+    val feeds by produceState(listOf(io.github.shoalapps.blobfish.data.Atp.PinnedFeed("feed", Graph.atp.discoverFeed, "Discover")), owner, settings.appView) {
+        value = listOf(io.github.shoalapps.blobfish.data.Atp.PinnedFeed("feed", Graph.atp.discoverFeed, "Discover"))
         runCatching { Graph.atp.pinnedFeeds() }.onSuccess { if (it.isNotEmpty()) value = it }
     }
     var tab by remember(feeds) { mutableStateOf(0) }
@@ -258,8 +261,17 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: 
     ) { pad ->
         Box(Modifier.padding(top = pad.calculateTopPadding())) {
             val f = feeds[tab.coerceIn(0, feeds.lastIndex)]
-            val vm = viewModel(key = "feed-${session?.did}-${f.kind}-${f.uri}") {
-                PagedVm { c ->
+            val feedOwner = "bluesky|" + (owner ?: "public")
+            val appView = settings.appView
+            val generation = feedGeneration
+            val feedId = "$appView|${f.kind}|${f.uri}"
+            val vm = viewModel(key = "feed-$feedGeneration-$feedOwner-$feedId") {
+                ReadingFeedVm(
+                    io.github.shoalapps.blobfish.data.FeedCache(feedOwner, feedId, (owner ?: "public") + "|" + appView),
+                    active = { Graph.store.feedGeneration.value == generation &&
+                        Graph.store.settings.value.appView == appView &&
+                        Graph.offline.owner() == owner },
+                ) { c ->
                     when (f.kind) {
                         "timeline" -> Graph.atp.timeline(c)
                         "list" -> Graph.atp.listFeed(f.uri, c)
@@ -267,7 +279,7 @@ fun HomeScreen(nav: Nav, onSearch: () -> Unit, onCompose: () -> Unit, onDrafts: 
                     }
                 }
             }
-            PagedList(vm, empty = if (f.kind == "timeline") "Follow some people to fill your timeline" else "Nothing here yet") { FeedRow(it, nav, following = f.kind == "timeline") }
+            ReadingFeedList(vm, empty = if (f.kind == "timeline") "Follow some people to fill your timeline" else "Nothing here yet") { FeedRow(it, nav, following = f.kind == "timeline") }
         }
     }
 }
@@ -486,7 +498,9 @@ private fun LazyListScope.replies(n: ThreadNode, nav: Nav, depth: Int, lineAbove
 
 // ---------------- Profile ----------------
 
-class ProfileVm(private val actor: String) : ViewModel() {
+class ProfileVm(private val actor: String, private val owner: String, private val namespace: String,
+    private val active: () -> Boolean) : ViewModel() {
+    private fun cache(kind: String) = if (TwitterParse.isTwitter(actor)) null else io.github.shoalapps.blobfish.data.FeedCache(owner, "profile|$actor|$kind", namespace)
     var profile by mutableStateOf<Profile?>(null); private set
     var error by mutableStateOf<String?>(null); private set
     /** A Twitter profile ("x:<id>" or "x:@handle"): read from its website, by handle. */
@@ -494,16 +508,16 @@ class ProfileVm(private val actor: String) : ViewModel() {
     private val xHandle get() = TwitterParse.handleOf(actor) ?: actor.removePrefix(TwitterParse.PREFIX).removePrefix("@")
     /** Twitter's posts load with its profile page, so they wait for it. */
     private val profileLoaded = kotlinx.coroutines.CompletableDeferred<Unit>()
-    val posts = PagedVm { c -> if (twitter) { profileLoaded.await(); XBridge.posts(xHandle, c) } else Graph.atp.authorFeed(actor, c) }
-    val replies by lazy { PagedVm { c -> if (twitter) XBridge.posts(xHandle, c, "replies") else Graph.atp.authorFeed(actor, c, "posts_with_replies") } }
-    val media by lazy { PagedVm { c -> if (twitter) XBridge.posts(xHandle, c, "media") else Graph.atp.authorFeed(actor, c, "posts_with_media") } }
+    val posts = ReadingFeedVm(cache("posts"), active) { c -> if (twitter) { profileLoaded.await(); XBridge.posts(xHandle, c) } else Graph.atp.authorFeed(actor, c) }
+    val replies by lazy { ReadingFeedVm(cache("replies"), active) { c -> if (twitter) XBridge.posts(xHandle, c, "replies") else Graph.atp.authorFeed(actor, c, "posts_with_replies") } }
+    val media by lazy { ReadingFeedVm(cache("media"), active) { c -> if (twitter) XBridge.posts(xHandle, c, "media") else Graph.atp.authorFeed(actor, c, "posts_with_media") } }
     var tab by mutableStateOf(0)
     val current get() = when (tab) { 1 -> replies; 2 -> media; else -> posts }
     init { load() }
     fun load() {
         viewModelScope.launch {
             runCatching { if (twitter) XBridge.profile(xHandle) else Graph.atp.profile(actor) }
-                .onSuccess { profile = it }.onFailure { error = friendly(it) }
+                .onSuccess { if (active()) profile = it }.onFailure { if (active()) error = friendly(it) }
             profileLoaded.complete(Unit)
         }
     }
@@ -606,7 +620,19 @@ private fun ProfileLinkChip(l: io.github.shoalapps.blobfish.data.ProfileLink) {
 
 @Composable
 fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: (() -> Unit)? = null, onAccounts: (() -> Unit)? = null) {
-    val vm = viewModel(key = "profile-$actor") { ProfileVm(actor) }
+    val generationState by Graph.store.feedGeneration.collectAsState()
+    val settingsState by Graph.store.settings.collectAsState()
+    val generation = generationState
+    val appView = settingsState.appView
+    val twitter = TwitterParse.isTwitter(actor)
+    val bskyOwner = Graph.offline.owner()
+    val owner = "bluesky|" + (bskyOwner ?: "public")
+    val namespace = (bskyOwner ?: "public") + "|" + appView
+    val vm = viewModel(key = "profile-$owner-$generation-$appView-$actor") {
+        ProfileVm(actor, owner, namespace, active = {
+            twitter || Graph.store.feedGeneration.value == generation && Graph.store.settings.value.appView == appView && Graph.offline.owner() == bskyOwner
+        })
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val session by Graph.store.session.collectAsState()
@@ -627,7 +653,7 @@ fun ProfileScreen(actor: String, nav: Nav, onBack: (() -> Unit)?, onSettings: ((
             )
         },
     ) { pad ->
-        PagedList(vm.current, Modifier.padding(top = pad.calculateTopPadding()), header = {
+        ReadingFeedList(vm.current, Modifier.padding(top = pad.calculateTopPadding()), headerCount = 2, header = {
             item(key = "header") {
                 val p = vm.profile
                 if (p == null) {
