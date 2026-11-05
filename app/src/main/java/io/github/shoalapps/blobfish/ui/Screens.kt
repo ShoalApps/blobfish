@@ -126,6 +126,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import io.github.shoalapps.blobfish.AppLanguage
+import io.github.shoalapps.common.ui.SupportCard
 
 fun friendly(e: Throwable): String = when (e) {
     is AtpException -> e.message ?: "Bluesky had a problem"
@@ -1143,7 +1145,15 @@ fun SettingsScreen(onBack: () -> Unit, onSignIn: () -> Unit, onModeration: () ->
         topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } }) },
     ) { pad ->
         LazyColumn(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).wrapContentWidth().widthIn(max = 680.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
-            item(key = "support") { SupportCard { openLink(context, "https://liberapay.com/ShoalApps") } }
+            item(key = "support") {
+                SupportCard(
+                    title = AppLanguage.text("Support Shoal"),
+                    description = AppLanguage.text("Free, open source and ad-free. Donations on Liberapay keep it going."),
+                    donateLabel = AppLanguage.text("Donate"),
+                    onDonateLabel = "Donate on Liberapay",
+                    heartIcon = Icons.Rounded.Favorite,
+                ) { openLink(context, "https://liberapay.com/ShoalApps") }
+            }
             group("Account") {
                 val sess = session
                 if (sess != null) {

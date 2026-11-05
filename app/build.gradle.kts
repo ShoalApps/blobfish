@@ -64,6 +64,7 @@ android {
 }
 
 dependencies {
+    implementation("io.github.shoalapps.common:shoal-ui:" + rootProject.file("shoal-common.version").readText().trim())
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
