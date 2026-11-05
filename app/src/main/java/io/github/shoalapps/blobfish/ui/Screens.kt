@@ -79,6 +79,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -114,6 +115,7 @@ import io.github.shoalapps.blobfish.data.FeedItem
 import io.github.shoalapps.blobfish.data.Notification
 import io.github.shoalapps.blobfish.data.Page
 import io.github.shoalapps.blobfish.data.Post
+import io.github.shoalapps.blobfish.data.Draft
 import io.github.shoalapps.blobfish.data.Profile
 import io.github.shoalapps.blobfish.data.Thread
 import io.github.shoalapps.blobfish.data.ThreadNode
@@ -816,40 +818,113 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
 
 // ---------------- Composer ----------------
 
+/** A terminal flag keeps a pending debounce or disposal from restoring a discarded/sent draft. */
+private class ComposerDraft(private val owner: String, replyTo: String?) {
+    private val restored = runCatching { Graph.drafts.load(owner, replyTo) }
+    val error = restored.exceptionOrNull()
+    var value by mutableStateOf(restored.getOrNull() ?: Draft(replyTo = replyTo))
+    private var finished = false
+    fun save() { if (!finished && error == null) Graph.drafts.save(owner, value) }
+    fun discard() {
+        Graph.drafts.discard(owner, value.replyTo)
+        finished = true
+    }
+    fun sent() {
+        // The outbox now owns the post, even if deleting the local draft fails.
+        finished = true
+        Graph.drafts.discard(owner, value.replyTo)
+    }
+}
+
 /** New post or reply, with a live preview of the formatting. */
 @Composable
 fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
+    val session by Graph.store.session.collectAsState()
+    val owner = session?.let { it.did + "|" + it.pds }
+    androidx.compose.runtime.key(owner, replyTo?.uri) {
+        DraftComposer(owner, replyTo, nav, onDismiss)
+    }
+}
+
+@Composable
+private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var text by remember { mutableStateOf("") }
+    val draft = remember { ComposerDraft(owner ?: "bluesky|signed-out", replyTo?.uri) }
+    val text = draft.value.text
+    val pictures = draft.value.pictures
     var busy by remember { mutableStateOf(false) }
-    // Up to four pictures, each with alt text, like Bluesky.
-    val pictures = remember { androidx.compose.runtime.mutableStateListOf<Pair<android.net.Uri, String>>() }
     var altFor by remember { mutableStateOf<Int?>(null) }
+    fun save(): Boolean = runCatching { draft.save() }.onFailure {
+        toast(context, "Couldn't save your draft. Please try again.")
+    }.isSuccess
+    val dismiss = { if (!busy && save()) onDismiss() }
+    LaunchedEffect(draft.value) {
+        kotlinx.coroutines.delay(400)
+        save()
+    }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, draft) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) save()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); save() }
+    }
+    LaunchedEffect(draft) {
+        if (draft.error != null) toast(context, "Couldn't open your draft. Close this and try again.")
+    }
     val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
-        uris.take(4 - pictures.size).forEach { pictures += it to "" }
+        busy = true
+        scope.launch {
+            // Finish copying and saving even if Android recreates the activity during the picker result.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                runCatching {
+                    for (uri in uris.take(4 - draft.value.pictures.size)) {
+                        val picture = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            Graph.drafts.copyPicture(owner ?: "bluesky|signed-out", replyTo?.uri) {
+                                context.contentResolver.openInputStream(uri) ?: error("Couldn't open this picture")
+                            }
+                        }
+                        draft.value = draft.value.copy(pictures = draft.value.pictures + picture)
+                        draft.save()
+                    }
+                }.onFailure { toast(context, "Couldn't save this picture. Please try again.") }
+                busy = false
+            }
+        }
     }
     val limit = 300
     val count = text.codePointCount(0, text.length)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { !busy || it != androidx.compose.material3.SheetValue.Hidden },
+    )) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp).imePadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Cancel") }
+                IconButton(enabled = !busy, onClick = dismiss) { Icon(Icons.Rounded.Close, "Close") }
                 Text(if (replyTo != null) "Reply to ${replyTo.author.name}" else "New post", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Text("${limit - count}", color = if (count > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
-                    enabled = !busy && (text.isNotBlank() || pictures.isNotEmpty()) && count <= limit,
+                    enabled = !busy && draft.error == null && owner != null && (text.isNotBlank() || pictures.isNotEmpty()) && count <= limit,
                     onClick = {
                         busy = true
                         scope.launch {
                             runCatching {
+                                draft.save()
+                                check(Graph.offline.owner() == owner) { "Your account changed. Reopen this draft to post it." }
                                 val images = pictures.map { (uri, alt) ->
-                                    val (blob, w, h) = uploadImage(context, uri, 2000)
+                                    val (blob, w, h) = uploadImage(context, android.net.Uri.parse(uri), 2000)
                                     io.github.shoalapps.blobfish.data.Atp.Attachment(blob, alt, w, h)
                                 }
+                                check(Graph.offline.owner() == owner) { "Your account changed. Reopen this draft to post it." }
                                 Graph.atp.post(text.trim(), replyTo, images)
                             }
-                                .onSuccess { toast(context, "Saved to send. Check saved actions for sync status."); onDismiss() }
+                                .onSuccess {
+                                    runCatching { draft.sent() }.onFailure { toast(context, "Your post is saved to send, but the draft couldn't be removed.") }
+                                    toast(context, "Saved to send. Check saved actions for sync status.")
+                                    onDismiss()
+                                }
                                 .onFailure { toast(context, friendly(it)) }
                             busy = false
                         }
@@ -858,7 +933,8 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
                 ) { Text("Post") }
             }
             OutlinedTextField(
-                text, { text = it }, Modifier.fillMaxWidth().padding(top = 8.dp),
+                text, { draft.value = draft.value.copy(text = it) }, Modifier.fillMaxWidth().padding(top = 8.dp),
+                enabled = !busy && draft.error == null,
                 placeholder = { Text("What's up? Use ``` for code, **bold**, *italic*") },
                 minLines = 4,
             )
@@ -866,32 +942,45 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
                 Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     pictures.forEachIndexed { i, (uri, alt) ->
                         Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp))) {
-                            AsyncImage(uri, alt, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            IconButton(onClick = { pictures.removeAt(i) }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp).padding(2.dp).clip(CircleShape).background(Color.Black.copy(alpha = .6f))) {
+                            AsyncImage(android.net.Uri.parse(uri), alt, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            IconButton(enabled = !busy, onClick = { draft.value = draft.value.copy(pictures = pictures.filterIndexed { index, _ -> index != i }); save() }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp).padding(2.dp).clip(CircleShape).background(Color.Black.copy(alpha = .6f))) {
                                 Icon(Icons.Rounded.Close, "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
                             }
                             Text(
                                 if (alt.isBlank()) "+ALT" else "ALT ✓", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = .6f)).clickable { altFor = i }.padding(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = .6f)).clickable(enabled = !busy) { altFor = i }.padding(horizontal = 6.dp, vertical = 2.dp),
                             )
                         }
                     }
                 }
             }
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(enabled = pictures.size < 4, onClick = { pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                IconButton(enabled = !busy && draft.error == null && pictures.size < 4, onClick = { pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                     Icon(Icons.Rounded.Image, "Add pictures", tint = MaterialTheme.colorScheme.primary)
                 }
                 if (pictures.isNotEmpty()) Text("${pictures.size}/4", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                TextButton(enabled = !busy, onClick = {
+                    runCatching { draft.discard() }
+                        .onSuccess { onDismiss() }
+                        .onFailure { toast(context, "Couldn't discard your draft. Please try again.") }
+                }) { Text("Discard draft") }
             }
             altFor?.let { i ->
-                var draft by remember(i) { mutableStateOf(pictures.getOrNull(i)?.second.orEmpty()) }
                 androidx.compose.material3.AlertDialog(
-                    onDismissRequest = { altFor = null },
+                    onDismissRequest = { save(); altFor = null },
                     title = { Text("Alt text") },
-                    text = { OutlinedTextField(draft, { if (it.length <= 2000) draft = it }, placeholder = { Text("Describe the picture for people who can't see it") }, minLines = 3, modifier = Modifier.fillMaxWidth()) },
-                    confirmButton = { androidx.compose.material3.TextButton(onClick = { pictures.getOrNull(i)?.let { pictures[i] = it.first to draft.trim() }; altFor = null }) { Text("Save") } },
-                    dismissButton = { androidx.compose.material3.TextButton(onClick = { altFor = null }) { Text("Cancel") } },
+                    text = { OutlinedTextField(
+                        pictures.getOrNull(i)?.alt.orEmpty(),
+                        { description ->
+                            if (description.length <= 2000) draft.value = draft.value.copy(pictures = pictures.mapIndexed { index, picture ->
+                                if (index == i) picture.copy(alt = description) else picture
+                            })
+                        },
+                        placeholder = { Text("Describe the picture for people who can't see it") },
+                        minLines = 3, modifier = Modifier.fillMaxWidth(),
+                    ) },
+                    confirmButton = { TextButton(onClick = { if (save()) altFor = null }) { Text("Done") } },
                 )
             }
             if (text.isNotBlank()) {

@@ -61,6 +61,7 @@ object Graph {
     }
     val store by lazy { Store(app) }
     val offline by lazy { io.github.shoalapps.blobfish.data.OfflineStore(app) }
+    val drafts by lazy { io.github.shoalapps.blobfish.data.Drafts(java.io.File(app.filesDir, "drafts")) }
     val atp by lazy { Atp(http, store) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
