@@ -75,7 +75,9 @@ class Drafts(private val directory: File, private val now: () -> Long = System::
     }.sortedWith(compareByDescending<SavedDraft> { it.savedAt }.thenBy { it.draft.replyTo.orEmpty() }.thenBy { it.draft.id })
 
     /** Copy even persistable content URIs, so removing the original cannot break a draft. */
-    @Synchronized fun copyPicture(owner: String, replyTo: String?, id: String = LEGACY_DRAFT_ID, open: () -> InputStream): DraftPicture {
+    // Not synchronized: a slow picture mustn't hold up saving, which happens on the main thread.
+    // Each copy gets its own new file, so nothing else can touch it.
+    fun copyPicture(owner: String, replyTo: String?, id: String = LEGACY_DRAFT_ID, open: () -> InputStream): DraftPicture {
         val folder = folder(owner, replyTo, id).apply { mkdirs() }
         val file = File(folder, UUID.randomUUID().toString() + ".image")
         try {
