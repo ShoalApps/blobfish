@@ -38,10 +38,11 @@ private fun AccountDrafts(owner: String?, nav: Nav, onBack: () -> Unit) {
     var opening by remember { mutableStateOf(false) }
     var composing by remember { mutableStateOf(false) }
     var replyTo by remember { mutableStateOf<Post?>(null) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
     var unavailable by remember { mutableStateOf<Draft?>(null) }
     fun discard(draft: Draft) {
         if (owner == null || Graph.offline.owner() != owner) return
-        runCatching { Graph.drafts.discard(owner, draft.replyTo) }
+        runCatching { Graph.drafts.discard(owner, draft.replyTo, draft.id) }
             .onSuccess { unavailable = null }
             .onFailure { toast(context, "Couldn't discard your draft. Please try again.") }
     }
@@ -53,13 +54,14 @@ private fun AccountDrafts(owner: String?, nav: Nav, onBack: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (drafts.isEmpty()) item { Text(if (owner == null) "Sign in to see your drafts" else "No drafts") }
-            items(drafts, key = { it.draft.replyTo.orEmpty() }) { saved ->
+            items(drafts, key = { if (it.draft.replyTo == null) "post:${it.draft.id}" else "reply:${it.draft.replyTo}" }) { saved ->
                 val draft = saved.draft
                 Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 1.dp) {
                     Column(Modifier.fillMaxWidth().clickable(enabled = !opening && !composing) {
                         if (owner == null || Graph.offline.owner() != owner) return@clickable
                         if (draft.replyTo == null) {
                             replyTo = null
+                            selectedId = draft.id
                             composing = true
                         } else {
                             opening = true
@@ -68,6 +70,7 @@ private fun AccountDrafts(owner: String?, nav: Nav, onBack: () -> Unit) {
                                     val post = Graph.atp.thread(draft.replyTo).focus.post
                                     if (Graph.offline.owner() == owner) {
                                         replyTo = post
+                                        selectedId = draft.id
                                         composing = true
                                     }
                                 } catch (e: CancellationException) { throw e
@@ -97,5 +100,5 @@ private fun AccountDrafts(owner: String?, nav: Nav, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { discard(draft) }) { Text("Discard draft") } },
         )
     }
-    if (composing) Composer(replyTo, nav) { composing = false; replyTo = null }
+    if (composing) Composer(replyTo, nav, draftId = selectedId) { composing = false; replyTo = null }
 }

@@ -32,44 +32,51 @@ data class DraftReply(val cid: String, val rootUri: String? = null, val rootCid:
     }
 }
 
+// Old records keep their original folder and picture paths. New standalone drafts use UUIDs.
+const val LEGACY_DRAFT_ID = "legacy"
+
 @Serializable
 data class Draft(val text: String = "", val replyTo: String? = null, val pictures: List<DraftPicture> = emptyList(),
-    val replyTarget: DraftReply? = null)
+    val replyTarget: DraftReply? = null, val id: String = LEGACY_DRAFT_ID)
 
 data class SavedDraft(val draft: Draft, val savedAt: Long)
 
-/** One private draft for each account and reply target. Pictures belong to that draft alone. */
+/** Private standalone drafts, and one reply draft per target. Pictures belong to one draft. */
 class Drafts(private val directory: File, private val now: () -> Long = System::currentTimeMillis) {
     private val revision = MutableStateFlow(0L)
     val changes = revision.asStateFlow()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-    private fun folder(owner: String, replyTo: String?): File {
-        val key = json.encodeToString(listOf(owner, replyTo))
+    /** Allocate an independent draft without creating files until it has content. */
+    fun newStandalone(): Draft = Draft(id = UUID.randomUUID().toString())
+
+    private fun folder(owner: String, replyTo: String?, id: String = LEGACY_DRAFT_ID): File {
+        val key = json.encodeToString(if (replyTo != null || id == LEGACY_DRAFT_ID)
+            listOf(owner, replyTo) else listOf(owner, null, id))
         val hash = MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
         return File(directory, hash)
     }
 
-    @Synchronized fun load(owner: String, replyTo: String?): Draft? {
-        val file = File(folder(owner, replyTo), "draft.json")
+    @Synchronized fun load(owner: String, replyTo: String?, id: String = LEGACY_DRAFT_ID): Draft? {
+        val file = File(folder(owner, replyTo, id), "draft.json")
         if (!file.exists()) return null
         return json.decodeFromString<Draft>(file.readText())
     }
 
-    /** Legacy files have no owner field; verify their account and target against the folder hash. */
+    /** Verify the account, target and id against the folder hash, including old records. */
     @Synchronized fun list(owner: String): List<SavedDraft> = directory.listFiles().orEmpty().mapNotNull { entry ->
         runCatching {
             val file = File(entry, "draft.json")
             val record = json.parseToJsonElement(file.readText()).jsonObject
             val draft = json.decodeFromJsonElement<Draft>(record)
-            if (entry.name != folder(owner, draft.replyTo).name ||
+            if (entry.name != folder(owner, draft.replyTo, draft.id).name ||
                 (draft.text.isBlank() && draft.pictures.isEmpty())) return@runCatching null
             SavedDraft(draft, record["savedAt"]?.jsonPrimitive?.long ?: file.lastModified())
         }.getOrNull()
-    }.sortedWith(compareByDescending<SavedDraft> { it.savedAt }.thenBy { it.draft.replyTo.orEmpty() })
+    }.sortedWith(compareByDescending<SavedDraft> { it.savedAt }.thenBy { it.draft.replyTo.orEmpty() }.thenBy { it.draft.id })
 
     /** Copy even persistable content URIs, so removing the original cannot break a draft. */
-    @Synchronized fun copyPicture(owner: String, replyTo: String?, open: () -> InputStream): DraftPicture {
-        val folder = folder(owner, replyTo).apply { mkdirs() }
+    @Synchronized fun copyPicture(owner: String, replyTo: String?, id: String = LEGACY_DRAFT_ID, open: () -> InputStream): DraftPicture {
+        val folder = folder(owner, replyTo, id).apply { mkdirs() }
         val file = File(folder, UUID.randomUUID().toString() + ".image")
         try {
             open().use { input -> FileOutputStream(file).use { out -> input.copyTo(out); out.fd.sync() } }
@@ -79,9 +86,9 @@ class Drafts(private val directory: File, private val now: () -> Long = System::
 
     @Synchronized fun save(owner: String, draft: Draft) {
         // Opening the composer and typing nothing shouldn't leave anything behind.
-        if (draft.text.isBlank() && draft.pictures.isEmpty()) { discard(owner, draft.replyTo); return }
-        val previous = load(owner, draft.replyTo)
-        val folder = folder(owner, draft.replyTo).apply { mkdirs() }
+        if (draft.text.isBlank() && draft.pictures.isEmpty()) { discard(owner, draft.replyTo, draft.id); return }
+        val previous = load(owner, draft.replyTo, draft.id)
+        val folder = folder(owner, draft.replyTo, draft.id).apply { mkdirs() }
         val temporary = File(folder, "draft.tmp")
         try {
             FileOutputStream(temporary).use { out ->
@@ -96,8 +103,8 @@ class Drafts(private val directory: File, private val now: () -> Long = System::
         previous?.pictures?.filter { old -> draft.pictures.none { it.uri == old.uri } }?.forEach { deletePicture(folder, it) }
     }
 
-    @Synchronized fun discard(owner: String, replyTo: String?) {
-        val folder = folder(owner, replyTo)
+    @Synchronized fun discard(owner: String, replyTo: String?, id: String = LEGACY_DRAFT_ID) {
+        val folder = folder(owner, replyTo, id)
         val file = File(folder, "draft.json")
         check(!file.exists() || file.delete()) { "Couldn't discard this draft. Please try again." }
         // Includes copies left by an interrupted picker or write. Never follow a saved URI elsewhere.

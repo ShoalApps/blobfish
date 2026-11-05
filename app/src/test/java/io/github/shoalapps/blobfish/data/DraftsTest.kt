@@ -215,4 +215,81 @@ class DraftsTest {
         assertNull(drafts.load("account", null))
         assertEquals(0, directory.listFiles().orEmpty().size)
     }
+    @Test fun newStandaloneIdsAreUniqueAndSurviveRestartAndEditing() {
+        var time = 100L
+        val drafts = Drafts(directory) { time++ }
+        val first = drafts.newStandalone().copy(text = "First")
+        val second = drafts.newStandalone().copy(text = "Second")
+        assertNotEquals(LEGACY_DRAFT_ID, first.id)
+        assertNotEquals(first.id, second.id)
+        drafts.save("a", first)
+        drafts.save("a", second)
+        assertEquals(first, store().load("a", null, first.id))
+        assertEquals(listOf(second.id, first.id), store().list("a").map { it.draft.id })
+        drafts.save("a", first.copy(text = "Edited"))
+        assertEquals(listOf("Edited", "Second"), store().list("a").map { it.draft.text })
+        assertNull(store().load("b", null, first.id))
+        assertTrue(store().list("b").isEmpty())
+    }
+
+    @Test fun legacyStandaloneKeepsItsPicturesAndCanBeEditedBesideNewDrafts() {
+        val drafts = store()
+        val picture = drafts.copyPicture("a", null) { ByteArrayInputStream(byteArrayOf(4, 5)) }
+        drafts.save("a", Draft("Old", pictures = listOf(picture)))
+        val committed = directory.walkTopDown().first { it.name == "draft.json" }
+        // Exactly the pre-id format, including the original absolute picture URI.
+        committed.writeText("""{"text":"Old","replyTo":null,"pictures":[{"uri":"${picture.uri}","alt":"Fish"}],"savedAt":123}""")
+        val legacy = store().list("a").single()
+        assertEquals(123L, legacy.savedAt)
+        assertEquals(LEGACY_DRAFT_ID, legacy.draft.id)
+        assertEquals("Fish", legacy.draft.pictures.single().alt)
+        assertEquals(legacy.draft, store().load("a", null, legacy.draft.id))
+        assertArrayEquals(byteArrayOf(4, 5), file(picture).readBytes())
+        val fresh = drafts.newStandalone().copy(text = "New")
+        drafts.save("a", fresh)
+        drafts.save("a", legacy.draft.copy(text = "Old edited"))
+        assertEquals(2, store().list("a").size)
+        assertTrue(store().list("b").isEmpty())
+        assertTrue(file(picture).exists())
+        drafts.discard("a", null, fresh.id)
+        assertTrue(file(picture).exists())
+        drafts.discard("a", null, legacy.draft.id)
+        assertFalse(file(picture).exists())
+    }
+
+    @Test fun standalonePicturesAndCleanupAreIndependent() {
+        val drafts = store()
+        val first = drafts.newStandalone()
+        val second = drafts.newStandalone()
+        val picture = drafts.copyPicture("a", null, first.id) { ByteArrayInputStream(byteArrayOf(1)) }
+        val removed = drafts.copyPicture("a", null, first.id) { ByteArrayInputStream(byteArrayOf(2)) }
+        val other = drafts.copyPicture("a", null, second.id) { ByteArrayInputStream(byteArrayOf(3)) }
+        drafts.save("a", first.copy(pictures = listOf(picture, removed)))
+        drafts.save("a", second.copy(pictures = listOf(other)))
+        val unfinished = drafts.copyPicture("a", null, first.id) { ByteArrayInputStream(byteArrayOf(9)) }
+        drafts.save("a", first.copy(pictures = listOf(picture)))
+        assertFalse(file(removed).exists())
+        assertTrue(file(other).exists())
+        // Discard and successful posting both remove just the selected draft.
+        drafts.discard("a", null, first.id)
+        assertFalse(file(picture).exists())
+        assertFalse(file(unfinished).exists())
+        assertTrue(file(other).exists())
+        assertEquals(second.id, store().list("a").single().draft.id)
+        drafts.save("a", second)
+        assertFalse(file(other).exists())
+        assertTrue(store().list("a").isEmpty())
+        assertTrue(directory.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test fun emptyFreshDraftDoesNotTouchWaitingDraftOrLeaveAFolder() {
+        val drafts = store()
+        val waiting = drafts.newStandalone().copy(text = "Waiting")
+        drafts.save("a", waiting)
+        val before = directory.listFiles()!!.toSet()
+        drafts.save("a", drafts.newStandalone())
+        assertEquals(before, directory.listFiles()!!.toSet())
+        assertEquals(waiting, store().list("a").single().draft)
+    }
+
 }

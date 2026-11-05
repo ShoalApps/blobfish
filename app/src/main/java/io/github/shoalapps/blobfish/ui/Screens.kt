@@ -116,6 +116,7 @@ import io.github.shoalapps.blobfish.data.Notification
 import io.github.shoalapps.blobfish.data.Page
 import io.github.shoalapps.blobfish.data.Post
 import io.github.shoalapps.blobfish.data.Draft
+import io.github.shoalapps.blobfish.data.LEGACY_DRAFT_ID
 import io.github.shoalapps.blobfish.data.Profile
 import io.github.shoalapps.blobfish.data.Thread
 import io.github.shoalapps.blobfish.data.ThreadNode
@@ -825,10 +826,14 @@ fun SignInScreen(onDone: () -> Unit, onBack: () -> Unit) {
 // ---------------- Composer ----------------
 
 /** A terminal flag keeps a pending debounce or disposal from restoring a discarded/sent draft. */
-private class ComposerDraft(private val owner: String, replyTo: Post?) {
-    private val restored = runCatching { Graph.drafts.load(owner, replyTo?.uri) }
+private class ComposerDraft(private val owner: String, replyTo: Post?, selectedId: String?) {
+    private val restored = runCatching {
+        if (replyTo != null || selectedId != null)
+            Graph.drafts.load(owner, replyTo?.uri, selectedId ?: LEGACY_DRAFT_ID)
+        else null
+    }
     val error = restored.exceptionOrNull()
-    var value by mutableStateOf((restored.getOrNull() ?: Draft(replyTo = replyTo?.uri)).let { draft ->
+    var value by mutableStateOf((restored.getOrNull() ?: if (replyTo == null) Graph.drafts.newStandalone() else Draft(replyTo = replyTo.uri)).let { draft ->
         draft.copy(replyTarget = draft.replyTarget ?: replyTo?.let {
             io.github.shoalapps.blobfish.data.DraftReply(it.cid, it.replyRoot?.uri, it.replyRoot?.cid)
         })
@@ -836,19 +841,19 @@ private class ComposerDraft(private val owner: String, replyTo: Post?) {
     private var finished = false
     fun save() { if (!finished && error == null) Graph.drafts.save(owner, value) }
     fun discard() {
-        Graph.drafts.discard(owner, value.replyTo)
+        Graph.drafts.discard(owner, value.replyTo, value.id)
         finished = true
     }
     fun sent() {
         // The outbox now owns the post, even if deleting the local draft fails.
         finished = true
-        Graph.drafts.discard(owner, value.replyTo)
+        Graph.drafts.discard(owner, value.replyTo, value.id)
     }
 }
 
 /** New post or reply, with a live preview of the formatting. */
 @Composable
-fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
+fun Composer(replyTo: Post?, nav: Nav, draftId: String? = null, onDismiss: () -> Unit) {
     val session by Graph.store.session.collectAsState()
     val owner = session?.let { it.did + "|" + it.pds }
     val openedBy = remember { owner }
@@ -856,16 +861,16 @@ fun Composer(replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
         LaunchedEffect(owner) { onDismiss() }
         return
     }
-    androidx.compose.runtime.key(owner, replyTo?.uri) {
-        DraftComposer(owner, replyTo, nav, onDismiss)
+    androidx.compose.runtime.key(owner, replyTo?.uri, draftId) {
+        DraftComposer(owner, replyTo, nav, draftId, onDismiss)
     }
 }
 
 @Composable
-private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, onDismiss: () -> Unit) {
+private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: String?, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val draft = remember { ComposerDraft(owner ?: "bluesky|signed-out", replyTo) }
+    val draft = remember { ComposerDraft(owner ?: "bluesky|signed-out", replyTo, draftId) }
     val text = draft.value.text
     val pictures = draft.value.pictures
     // Keep the saved strong references even when reopened from a freshly fetched post.
@@ -905,7 +910,7 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, onDismiss: (
                 runCatching {
                     for (uri in uris.take(4 - draft.value.pictures.size)) {
                         val picture = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            Graph.drafts.copyPicture(owner ?: "bluesky|signed-out", replyTo?.uri) {
+                            Graph.drafts.copyPicture(owner ?: "bluesky|signed-out", draft.value.replyTo, draft.value.id) {
                                 context.contentResolver.openInputStream(uri) ?: error("Couldn't open this picture")
                             }
                         }
