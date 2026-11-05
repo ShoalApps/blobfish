@@ -41,7 +41,7 @@ class ReadingFeedVm(
     var atTop = true
     // Bound only while this list is composed; called before publishing a new list in the same frame.
     var beforePublish: ((List<FeedItem>) -> Unit)? = null
-    private var cursor by mutableStateOf<String?>(null)
+    var cursor by mutableStateOf<String?>(null); private set
     val hasMore get() = cursor != null
     var pageError by mutableStateOf<String?>(null); private set
     private var busy = false
@@ -222,19 +222,20 @@ fun ReadingFeedList(vm: ReadingFeedVm, modifier: Modifier = Modifier, empty: Str
             if (!initialOnline && online) vm.refresh()
             initialOnline = false
         }
-        LaunchedEffect(vm.items.size, vm.loadingMore, vm.restoring, vm.refreshing, vm.pageError, online, state) {
-            if (filtered || !online || vm.pageError != null) return@LaunchedEffect
-            snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-                .distinctUntilChanged().collect { last ->
-                    if (!vm.refreshing && last >= 0 && last >= vm.items.size + headerCount - 6) vm.loadMore()
-                }
+        val nearEnd by remember(state, rows.size, headerCount, filtered) {
+            derivedStateOf {
+                val last = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                (filtered && rows.isEmpty()) || last >= 0 && last >= rows.size + headerCount - 6
+            }
         }
-        LaunchedEffect(filtered, rows.size, online, vm.restoring, vm.refreshing, vm.pageError, state) {
-            if (!filtered || !online || rows.isEmpty() || vm.pageError != null) return@LaunchedEffect
-            snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-                .distinctUntilChanged().collect { last ->
-                    if (!vm.refreshing && last >= 0 && last >= rows.size + headerCount - 6) vm.loadMore()
-                }
+        LaunchedEffect(nearEnd, online, vm.cursor, vm.loadingMore, vm.restoring, vm.refreshing, vm.error, vm.pageError) {
+            if (nearEnd && online && vm.hasMore && !vm.loadingMore && !vm.restoring &&
+                !vm.refreshing && vm.error == null && vm.pageError == null
+            ) {
+                // Sparse filters can skip several pages in a row. Pace those reads.
+                if (filtered) delay(750)
+                vm.loadMore()
+            }
         }
         Column(modifier.fillMaxSize()) {
             OfflineStatus()
@@ -245,7 +246,13 @@ fun ReadingFeedList(vm: ReadingFeedVm, modifier: Modifier = Modifier, empty: Str
                     when {
                         vm.loading -> item { CenterLoading() }
                         vm.error != null && vm.items.isEmpty() -> item { Message(vm.error!!, "Try again") { vm.refresh() } }
-                        rows.isEmpty() -> item { Message(if (filtered) "No NSFW posts on this page" else empty) }
+                        rows.isEmpty() -> item {
+                            Message(when {
+                                filtered && online && vm.hasMore && vm.pageError == null -> "Looking for NSFW posts…"
+                                filtered -> "No matching NSFW posts"
+                                else -> empty
+                            })
+                        }
                         else -> items(rows, key = { it.readingKey }) { row(it) }
                     }
                     when {

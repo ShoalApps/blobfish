@@ -489,8 +489,14 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             last >= 0 && last >= layout.totalItemsCount - 5
         }
     }
-    LaunchedEffect(tab, nearEnd, posts.size, vm.loading, vm.pageError, online) {
-        if (tab == 0 && online && nearEnd && posts.isNotEmpty() && vm.pageError == null) vm.loadMorePosts()
+    val scanningFilteredPages = settings.nsfwOnly && posts.isEmpty()
+    LaunchedEffect(tab, nearEnd, scanningFilteredPages, settings.nsfwOnly, vm.postCursor, vm.loading, vm.loadingMore, vm.pageError, online) {
+        if (tab == 0 && online && (nearEnd || scanningFilteredPages) && vm.postCursor != null &&
+            !vm.loading && !vm.loadingMore && vm.pageError == null
+        ) {
+            if (settings.nsfwOnly) kotlinx.coroutines.delay(750)
+            vm.loadMorePosts()
+        }
     }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -529,7 +535,11 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
                 (if (tab == 0) vm.loading else vm.peopleLoading) -> item { CenterLoading() }
                 tab == 0 && vm.error != null -> item { Message(vm.error!!, "Try again", vm::refreshPosts) }
                 tab == 1 && vm.peopleError != null -> item { Message(vm.peopleError!!) }
-                vm.searched && tab == 0 && posts.isEmpty() -> item { Message(if (settings.nsfwOnly) "No NSFW posts on this page" else "No posts found. Try another search.") }
+                vm.searched && tab == 0 && posts.isEmpty() -> item { Message(when {
+                    scanningFilteredPages && online && vm.postCursor != null && vm.pageError == null -> "Looking for NSFW posts…"
+                    settings.nsfwOnly -> "No matching NSFW posts"
+                    else -> "No posts found. Try another search."
+                }) }
                 vm.searched && tab == 1 && vm.people.isEmpty() -> item { Message("No people found. Try another search.") }
                 tab == 0 -> items(posts, key = { it.uri }) { PostCard(it, nav) }
                 else -> items(vm.people) { a -> PersonRow(a) { nav.profile(a.did) } }
