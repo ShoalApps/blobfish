@@ -118,6 +118,7 @@ class BlueskyParse(
             card = card(embed),
             quote = quote(embed),
             quoteAvailability = quoteAvailability(embed),
+            replyDisabled = o["viewer"].obj?.get("replyDisabled").bool == true,
             myLike = recordState("app.bsky.feed.like", o.str("uri").orEmpty(), o["viewer"].obj.str("like")),
             myRepost = recordState("app.bsky.feed.repost", o.str("uri").orEmpty(), o["viewer"].obj.str("repost")),
             replyRoot = record["reply"].obj?.get("root").obj?.let { r -> Ref(r.str("uri") ?: return@let null, r.str("cid") ?: return@let null) },

@@ -96,6 +96,7 @@ data class Post(
     val unsupportedTypes: List<String> = emptyList(),
     /** Null means no quote (or a cache written before availability was recorded). */
     val quoteAvailability: QuoteAvailability? = null,
+    val replyDisabled: Boolean = false,
 ) {
     val hasMedia get() = images.isNotEmpty() || media.isNotEmpty() || card != null
 }
@@ -600,6 +601,7 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
     data class Attachment(val blob: JsonObject, val alt: String, val width: Int, val height: Int)
 
     suspend fun post(text: String, replyTo: Post? = null, images: List<Attachment> = emptyList()): String {
+        check(replyTo?.replyDisabled != true) { "Replies are restricted on this post" }
         val facets = RichText.detect(text).mapNotNull { f ->
             val feature = when (f.kind) {
                 RichText.Facet.Kind.LINK -> buildJsonObject { put("\$type", "app.bsky.richtext.facet#link"); put("uri", f.value) }

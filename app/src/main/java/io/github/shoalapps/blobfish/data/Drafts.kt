@@ -38,14 +38,15 @@ data class DraftReply(val cid: String, val rootUri: String? = null, val rootCid:
     fun toPost(): Post? = parent?.let {
         Post(it.uri, cid, Author(it.authorDid, it.authorHandle, it.authorName, null), it.text,
             emptyList(), null, 0, 0, 0, images = emptyList(), card = null, quote = null,
-            myLike = null, myRepost = null, replyRoot = rootUri?.let { uri -> Ref(uri, requireNotNull(rootCid)) })
+            myLike = null, myRepost = null, replyRoot = rootUri?.let { uri -> Ref(uri, requireNotNull(rootCid)) },
+            replyDisabled = it.replyDisabled)
     }
 }
 
 /** Small, self-contained copy of what the reply composer needs to reopen offline. */
 @Serializable
 data class DraftParent(val uri: String, val authorDid: String, val authorHandle: String,
-    val authorName: String?, val text: String) {
+    val authorName: String?, val text: String, val replyDisabled: Boolean = false) {
     init {
         require(uri.isNotBlank())
         require(authorDid.isNotBlank())
@@ -54,7 +55,7 @@ data class DraftParent(val uri: String, val authorDid: String, val authorHandle:
 
     companion object {
         fun from(post: Post) = DraftParent(post.uri, post.author.did, post.author.handle,
-            post.author.displayName, post.text)
+            post.author.displayName, post.text, post.replyDisabled)
     }
 }
 

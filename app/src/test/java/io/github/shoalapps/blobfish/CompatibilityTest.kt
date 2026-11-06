@@ -40,6 +40,16 @@ class CompatibilityTest {
         assertEquals("Still readable", post.text)
     }
 
+    @Test fun replyRestrictionsSurviveSavingADraft() {
+        val fixture = fixture("unknown-embed")
+        val viewer = JsonObject(mapOf("replyDisabled" to kotlinx.serialization.json.JsonPrimitive(true)))
+        val post = BlueskyParse().parsePost(JsonObject(fixture + ("viewer" to viewer)))!!
+        val parent = io.github.shoalapps.blobfish.data.DraftParent.from(post)
+        val draft = io.github.shoalapps.blobfish.data.DraftReply(post.cid, parent = parent)
+        assertTrue(post.replyDisabled)
+        assertTrue(draft.toPost()!!.replyDisabled)
+    }
+
     @Test fun malformedOptionalShapesAreTolerated() {
         val base = fixture("unknown-embed").toMutableMap()
         for (key in listOf("embed", "viewer", "labels", "likeCount")) base[key] = JsonArray(emptyList())

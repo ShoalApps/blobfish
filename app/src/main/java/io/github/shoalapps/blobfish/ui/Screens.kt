@@ -1258,7 +1258,8 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: Str
                 Text(if (replyTo != null) "Reply to ${parent?.author?.name ?: replyTo.author.name}" else "New post", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Text("${limit - count}", color = if (!validText) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
-                    enabled = !busy && draft.error == null && owner != null && (text.isNotBlank() || pictures.isNotEmpty()) && validText,
+                    enabled = !busy && draft.error == null && owner != null && target?.replyDisabled != true &&
+                        (text.isNotBlank() || pictures.isNotEmpty()) && validText,
                     onClick = {
                         busy = true
                         postError = null
@@ -1271,7 +1272,11 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: Str
                                         "The post you're replying to was deleted or is no longer available. Your draft is still saved."
                                     }
                                     if (Graph.offline.available()) {
-                                        try { Graph.atp.thread(target.uri) }
+                                        try {
+                                            check(!Graph.atp.thread(target.uri).focus.post.replyDisabled) {
+                                                "Replies are restricted on this post. Your draft is still saved."
+                                            }
+                                        }
                                         catch (e: AtpException) {
                                             if (e.status == 404) error("The post you're replying to was deleted or is no longer available. Your draft is still saved.")
                                             throw e
@@ -1303,6 +1308,9 @@ private fun DraftComposer(owner: String?, replyTo: Post?, nav: Nav, draftId: Str
                 placeholder = { Text("What's up? Use ``` for code, **bold**, *italic*") },
                 minLines = 4,
             )
+            if (target?.replyDisabled == true) {
+                Text("Replies are restricted on this post. Your draft is still saved.", color = MaterialTheme.colorScheme.error)
+            }
             postError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
             if (pictures.isNotEmpty()) {
                 Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

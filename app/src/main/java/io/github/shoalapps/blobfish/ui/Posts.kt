@@ -582,7 +582,9 @@ private fun Actions(post: Post, nav: Nav) {
     var repostUri by remember(post.uri) { mutableStateOf(post.myRepost) }
     var reposts by remember(post.uri) { mutableIntStateOf(post.repostCount) }
     Row(Modifier.fillMaxWidth().padding(top = 6.dp).testTag("post-actions"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Action(Icons.Outlined.ChatBubbleOutline, post.replyCount, false, "Reply") {
+        val canReply = twitter || !post.replyDisabled
+        Action(Icons.Outlined.ChatBubbleOutline, post.replyCount, false,
+            if (canReply) "Reply" else "Replies restricted", enabled = canReply) {
             if (signedIn) nav.reply(post) else toast(context, "Sign in to reply")
         }
         Action(Icons.Rounded.Repeat, reposts, repostUri != null, "Repost") {
@@ -708,14 +710,18 @@ private fun ContentCover(reason: String, modifier: Modifier = Modifier, media: B
 }
 
 @Composable
-private fun Action(icon: ImageVector, count: Int, active: Boolean, label: String, activeColor: Color = MaterialTheme.colorScheme.primary, onClick: () -> Unit) {
+private fun Action(icon: ImageVector, count: Int, active: Boolean, label: String, activeColor: Color = MaterialTheme.colorScheme.primary, enabled: Boolean = true, onClick: () -> Unit) {
     val pop = remember { Animatable(1f) }
     LaunchedEffect(active) {
         if (active) { pop.animateTo(1.3f, tween(100)); pop.animateTo(1f, spring(dampingRatio = .35f, stiffness = 500f)) }
     }
-    val tint = if (active) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        active -> activeColor
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
-        Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+        Modifier.clip(RoundedCornerShape(50)).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, label, Modifier.size(20.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value }, tint = tint)
