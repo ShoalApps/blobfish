@@ -478,6 +478,13 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         return Page(items, o.str("cursor"))
     }
 
+    suspend fun markNotificationsRead(seenAt: Instant, owner: String) {
+        check(Graph.offline.available()) { "Connect to Bluesky to mark notifications as read" }
+        call("POST", "app.bsky.notification.updateSeen", body = buildJsonObject {
+            put("seenAt", seenAt.toString())
+        }, expectedOwner = owner)
+    }
+
     // ---- Writing ----
 
     internal suspend fun sendSaved(write: SavedWrite) {

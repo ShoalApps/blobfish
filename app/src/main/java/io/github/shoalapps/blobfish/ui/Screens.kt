@@ -610,8 +610,39 @@ fun NotificationsScreen(nav: Nav, onSignIn: () -> Unit) {
             if (session == null) {
                 Message("Sign in to see who's liked, reposted and replied to you.", "Sign in", onSignIn)
             } else {
-                val vm = viewModel(key = "notifs-${session!!.did}") { PagedVm { c -> Graph.atp.notifications(c) } }
-                PagedList(vm, empty = "No notifications yet") { n -> NotificationRow(n, nav) }
+                val current = session ?: return@Box
+                val owner = current.did + "|" + current.pds
+                val vm = viewModel(key = "notifs-$owner") { PagedVm { c -> Graph.atp.notifications(c) } }
+                val scope = rememberCoroutineScope()
+                val context = LocalContext.current
+                val online by Graph.offline.online.collectAsState()
+                var seenAt by remember(owner) { mutableStateOf<java.time.Instant?>(null) }
+                var saving by remember(owner) { mutableStateOf(false) }
+                fun isRead(notification: Notification) = notification.read ||
+                    (notification.at?.let { time -> seenAt?.let { !time.isAfter(it) } } == true)
+                val newest = vm.items.mapNotNull { it.at }.maxOrNull()
+                val hasUnread = vm.items.any { it.at != null && !isRead(it) }
+                PagedList(vm, empty = "No notifications yet", header = {
+                    if (newest != null && hasUnread) item {
+                        TextButton(enabled = online && !saving, onClick = {
+                            saving = true
+                            scope.launch {
+                                try {
+                                    Graph.atp.markNotificationsRead(newest, owner)
+                                    seenAt = newest
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    toast(context, friendly(e))
+                                } finally {
+                                    saving = false
+                                }
+                            }
+                        }) { Text(if (saving) "Marking as read…" else "Mark all as read") }
+                    }
+                }) { notification ->
+                    NotificationRow(notification.copy(read = isRead(notification)), nav)
+                }
             }
         }
     }
