@@ -73,6 +73,16 @@ class Store(context: Context) {
         _hiddenFollows.value = updated
     }
 
+    private val _deletedPosts = MutableStateFlow(prefs.getStringSet("deleted-posts", emptySet()).orEmpty().toSet())
+    val deletedPosts: StateFlow<Set<String>> = _deletedPosts
+
+    @Synchronized
+    fun rememberDeletedPost(uri: String) {
+        val updated = (_deletedPosts.value - uri + uri).toList().takeLast(500).toSet()
+        prefs.edit().putStringSet("deleted-posts", updated).apply()
+        _deletedPosts.value = updated
+    }
+
     fun updateSettings(change: (Settings) -> Settings) {
         _settings.update(change)
         io.github.shoalapps.blobfish.Graph.offline.changed()

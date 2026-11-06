@@ -506,6 +506,23 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         })
     }
 
+    suspend fun deleteOwnPost(uri: String, owner: String) {
+        val s = requireSession()
+        val prefix = "at://${s.did}/app.bsky.feed.post/"
+        val key = uri.removePrefix(prefix)
+        require(uri.startsWith(prefix) && key.matches(Regex("[A-Za-z0-9._~:-]{1,512}")) && key !in setOf(".", "..")) {
+            "This post belongs to another account"
+        }
+        check(Graph.offline.available()) { "Connect to Bluesky to delete this post" }
+        val body = buildJsonObject {
+            put("repo", s.did)
+            put("collection", "app.bsky.feed.post")
+            put("rkey", key)
+        }
+        call("POST", "com.atproto.repo.deleteRecord", body = body, expectedOwner = owner)
+        store.rememberDeletedPost(uri)
+    }
+
     private fun subject(p: Post) = buildJsonObject { put("uri", p.uri); put("cid", p.cid) }
     private fun now() = Instant.now().toString()
 

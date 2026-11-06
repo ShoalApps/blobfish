@@ -219,6 +219,11 @@ fun PostCard(
     lineAbove: Boolean = false,
     lineBelow: Boolean = false,
 ) {
+    val deletedPosts by Graph.store.deletedPosts.collectAsState()
+    if (post.uri in deletedPosts) {
+        return
+    }
+
     val prefs by Graph.store.moderation.collectAsState()
     val signedIn = Graph.store.session.collectAsState().value != null
     val decision = remember(post, prefs, signedIn) { Moderation.decide(post, prefs, signedIn) }
@@ -332,6 +337,12 @@ fun VerifiedBadge(author: Author, size: androidx.compose.ui.unit.Dp) {
  */
 @Composable
 fun AnchorPost(post: Post, nav: Nav, lineAbove: Boolean) {
+    val deletedPosts by Graph.store.deletedPosts.collectAsState()
+    if (post.uri in deletedPosts) {
+        Text("Post deleted")
+        return
+    }
+
     val lineColor = MaterialTheme.colorScheme.outlineVariant
     val prefs by Graph.store.moderation.collectAsState()
     val signedIn = Graph.store.session.collectAsState().value != null
@@ -425,6 +436,12 @@ fun PostQuote(post: Post, nav: Nav, modifier: Modifier = Modifier) {
 /** A quoted post in a rounded box, with its own moderation. */
 @Composable
 fun QuoteCard(q: Post, nav: Nav, modifier: Modifier = Modifier) {
+    val deletedPosts by Graph.store.deletedPosts.collectAsState()
+    if (q.uri in deletedPosts) {
+        Text("Quoted post deleted")
+        return
+    }
+
     val prefs by Graph.store.moderation.collectAsState()
     val signedIn = Graph.store.session.collectAsState().value != null
     val quoteDecision = remember(q, prefs, signedIn) { Moderation.decide(q, prefs, signedIn) }
@@ -604,11 +621,46 @@ private fun Actions(post: Post, nav: Nav) {
 private fun PostMenu(post: Post) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val signedIn = Graph.store.session.collectAsState().value != null
+    val session by Graph.store.session.collectAsState()
+    val signedIn = session != null
+    val owner = session?.let { it.did + "|" + it.pds }
+    val canDelete = session?.did == post.author.did && post.uri.startsWith("at://${post.author.did}/app.bsky.feed.post/")
+    var confirming by remember(post.uri, owner) { mutableStateOf(false) }
+    var deleting by remember(post.uri, owner) { mutableStateOf(false) }
+    if (confirming && owner != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!deleting) confirming = false },
+            title = { Text("Delete this post?") },
+            text = { Text("This permanently removes the post from your Bluesky account.") },
+            confirmButton = {
+                TextButton(enabled = !deleting, onClick = {
+                    deleting = true
+                    scope.launch {
+                        try {
+                            Graph.atp.deleteOwnPost(post.uri, owner)
+                            toast(context, "Post deleted")
+                            confirming = false
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            toast(context, friendly(e))
+                        } finally {
+                            deleting = false
+                        }
+                    }
+                }) { Text(if (deleting) "Deleting…" else "Delete post") }
+            },
+            dismissButton = { TextButton(enabled = !deleting, onClick = { confirming = false }) { Text("Cancel") } },
+        )
+    }
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Rounded.MoreVert, "More", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (canDelete) DropdownMenuItem(
+                text = { Text("Delete post") },
+                onClick = { open = false; confirming = true },
+            )
             DropdownMenuItem(
                 text = { Text("Hide post") },
                 leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null) },
