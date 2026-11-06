@@ -390,6 +390,8 @@ class SearchVm : ViewModel() {
     var postCursor by mutableStateOf<String?>(null); private set
     var loadingMore by mutableStateOf(false); private set
     var pageError by mutableStateOf<String?>(null); private set
+    var peopleCursor by mutableStateOf<String?>(null); private set
+    var peopleLoadingMore by mutableStateOf(false); private set
     private var submittedQuery = ""
     private var peopleJob: kotlinx.coroutines.Job? = null
     private var postsJob: kotlinx.coroutines.Job? = null
@@ -401,15 +403,34 @@ class SearchVm : ViewModel() {
         submittedQuery = submitted
         searched = true
         refreshPosts()
+        refreshPeople()
+    }
+
+    fun refreshPeople() {
         peopleJob?.cancel()
-        peopleLoading = true
-        peopleError = null
         people = emptyList()
+        peopleCursor = null
+        peopleLoading = true
+        peopleLoadingMore = false
+        requestPeople(null)
+    }
+
+    fun loadMorePeople() {
+        val cursor = peopleCursor ?: return
+        if (peopleLoading || peopleLoadingMore) return
+        peopleLoadingMore = true
+        requestPeople(cursor)
+    }
+
+    private fun requestPeople(cursor: String?) {
+        val submitted = submittedQuery
+        peopleError = null
         peopleJob = viewModelScope.launch {
             try {
-                val result = Graph.atp.searchPeople(submitted)
+                val page = Graph.atp.searchPeople(submitted, cursor)
                 ensureActive()
-                people = result
+                people = (people + page.items).distinctBy { it.did }
+                peopleCursor = page.cursor?.takeUnless { it == cursor }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -417,6 +438,7 @@ class SearchVm : ViewModel() {
                 peopleError = friendly(e)
             }
             peopleLoading = false
+            peopleLoadingMore = false
         }
     }
 
@@ -479,10 +501,12 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             Moderation.isNsfw(it) && Moderation.decide(it, prefs, signedIn) !is Moderation.Decision.Hide
         }
     }
-    val listState = rememberLazyListState()
+    val postListState = rememberLazyListState()
+    val peopleListState = rememberLazyListState()
     val online by Graph.offline.online.collectAsState()
     var tab by remember { mutableStateOf(0) }
-    val nearEnd by remember {
+    val listState = if (tab == 0) postListState else peopleListState
+    val nearEnd by remember(listState) {
         derivedStateOf {
             val layout = listState.layoutInfo
             val last = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
@@ -497,6 +521,9 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             if (settings.nsfwOnly) kotlinx.coroutines.delay(750)
             vm.loadMorePosts()
         }
+    }
+    LaunchedEffect(tab, nearEnd, online, vm.peopleCursor, vm.peopleLoadingMore, vm.peopleError) {
+        if (tab == 1 && nearEnd && online && vm.peopleError == null) vm.loadMorePeople()
     }
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -534,7 +561,7 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
             when {
                 (if (tab == 0) vm.loading else vm.peopleLoading) -> item { CenterLoading() }
                 tab == 0 && vm.error != null -> item { Message(vm.error!!, "Try again", vm::refreshPosts) }
-                tab == 1 && vm.peopleError != null -> item { Message(vm.peopleError!!) }
+                tab == 1 && vm.peopleError != null && vm.peopleCursor == null -> item { Message(vm.peopleError!!, "Try again", vm::refreshPeople) }
                 vm.searched && tab == 0 && posts.isEmpty() -> item { Message(when {
                     scanningFilteredPages && online && vm.postCursor != null && vm.pageError == null -> "Looking for NSFW posts…"
                     settings.nsfwOnly -> "No matching NSFW posts"
@@ -542,7 +569,14 @@ fun SearchScreen(nav: Nav, onBack: () -> Unit, initial: String? = null, vm: Sear
                 }) }
                 vm.searched && tab == 1 && vm.people.isEmpty() -> item { Message("No people found. Try another search.") }
                 tab == 0 -> items(posts, key = { it.uri }) { PostCard(it, nav) }
-                else -> items(vm.people) { a -> PersonRow(a) { nav.profile(a.did) } }
+                else -> items(vm.people, key = { it.did }) { a -> PersonRow(a) { nav.profile(a.did) } }
+            }
+            if (tab == 1 && vm.peopleCursor != null) item {
+                when {
+                    vm.peopleLoadingMore -> CenterLoading()
+                    vm.peopleError != null -> Message(vm.peopleError!!, "Try again", vm::loadMorePeople)
+                    else -> TextButton(onClick = vm::loadMorePeople) { Text("Load more") }
+                }
             }
             if (tab == 0 && vm.postCursor != null) item {
                 when {

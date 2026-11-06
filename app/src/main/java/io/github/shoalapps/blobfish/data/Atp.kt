@@ -456,9 +456,10 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         return Page((o["posts"] as? JsonArray).orEmpty().mapNotNull { it.obj?.let(::parsePost) }, o.str("cursor"))
     }
 
-    suspend fun searchPeople(q: String): List<Author> {
-        val o = call("GET", "app.bsky.actor.searchActors", mapOf("q" to q, "limit" to "25"))
-        return (o["actors"] as? JsonArray).orEmpty().mapNotNull { it.obj?.let(::parseAuthor) }
+    suspend fun searchPeople(q: String, cursor: String?): Page<Author> {
+        val response = call("GET", "app.bsky.actor.searchActors", mapOf("q" to q, "limit" to "25", "cursor" to cursor))
+        val people = (response["actors"] as? JsonArray).orEmpty().mapNotNull { it.obj?.let(::parseAuthor) }
+        return Page(people, response.str("cursor"))
     }
 
     suspend fun notifications(cursor: String? = null): Page<Notification> {
