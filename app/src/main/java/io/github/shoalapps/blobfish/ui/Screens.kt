@@ -602,17 +602,39 @@ fun PersonRow(a: Author, onClick: () -> Unit) {
 
 // ---------------- Notifications ----------------
 
+private enum class NotificationFilter(val label: String, val reasons: List<String>) {
+    All("All", emptyList()),
+    Conversations("Replies and mentions", listOf("reply", "mention", "quote")),
+    Likes("Likes", listOf("like", "like-via-repost")),
+    Reposts("Reposts", listOf("repost", "repost-via-repost")),
+    Follows("Follows", listOf("follow")),
+}
+
 @Composable
 fun NotificationsScreen(nav: Nav, onSignIn: () -> Unit) {
     val session by Graph.store.session.collectAsState()
-    Scaffold(contentWindowInsets = WindowInsets(0), topBar = { TopAppBar(title = { Text("Notifications") }) }) { pad ->
+    val owner = session?.let { it.did + "|" + it.pds }
+    var filter by remember(owner) { mutableStateOf(NotificationFilter.All) }
+    Scaffold(contentWindowInsets = WindowInsets(0), topBar = {
+        Column {
+            TopAppBar(title = { Text("Notifications") })
+            if (owner != null) androidx.compose.material3.PrimaryScrollableTabRow(
+                selectedTabIndex = filter.ordinal, edgePadding = 12.dp,
+            ) {
+                NotificationFilter.entries.forEach { option ->
+                    Tab(selected = filter == option, onClick = { filter = option }, text = { Text(option.label) })
+                }
+            }
+        }
+    }) { pad ->
         Box(Modifier.padding(top = pad.calculateTopPadding())) {
-            if (session == null) {
+            if (owner == null) {
                 Message("Sign in to see who's liked, reposted and replied to you.", "Sign in", onSignIn)
             } else {
-                val current = session ?: return@Box
-                val owner = current.did + "|" + current.pds
-                val vm = viewModel(key = "notifs-$owner") { PagedVm { c -> Graph.atp.notifications(c) } }
+                val selected = filter
+                val vm = viewModel(key = "notifs-$owner-${selected.name}") {
+                    PagedVm { cursor -> Graph.atp.notifications(cursor, selected.reasons, owner) }
+                }
                 val scope = rememberCoroutineScope()
                 val context = LocalContext.current
                 val online by Graph.offline.online.collectAsState()
@@ -622,26 +644,28 @@ fun NotificationsScreen(nav: Nav, onSignIn: () -> Unit) {
                     (notification.at?.let { time -> seenAt?.let { !time.isAfter(it) } } == true)
                 val newest = vm.items.mapNotNull { it.at }.maxOrNull()
                 val hasUnread = vm.items.any { it.at != null && !isRead(it) }
-                PagedList(vm, empty = "No notifications yet", header = {
-                    if (newest != null && hasUnread) item {
-                        TextButton(enabled = online && !saving, onClick = {
-                            saving = true
-                            scope.launch {
-                                try {
-                                    Graph.atp.markNotificationsRead(newest, owner)
-                                    seenAt = newest
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    toast(context, friendly(e))
-                                } finally {
-                                    saving = false
+                androidx.compose.runtime.key(owner, selected) {
+                    PagedList(vm, empty = "No notifications in this view", header = {
+                        if (selected == NotificationFilter.All && newest != null && hasUnread) item {
+                            TextButton(enabled = online && !saving, onClick = {
+                                saving = true
+                                scope.launch {
+                                    try {
+                                        Graph.atp.markNotificationsRead(newest, owner)
+                                        seenAt = newest
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        toast(context, friendly(e))
+                                    } finally {
+                                        saving = false
+                                    }
                                 }
-                            }
-                        }) { Text(if (saving) "Marking as read…" else "Mark all as read") }
+                            }) { Text(if (saving) "Marking as read…" else "Mark all as read") }
+                        }
+                    }) { notification ->
+                        NotificationRow(notification.copy(read = isRead(notification)), nav)
                     }
-                }) { notification ->
-                    NotificationRow(notification.copy(read = isRead(notification)), nav)
                 }
             }
         }
@@ -651,8 +675,8 @@ fun NotificationsScreen(nav: Nav, onSignIn: () -> Unit) {
 @Composable
 private fun NotificationRow(n: Notification, nav: Nav) {
     val (icon, verb) = when (n.reason) {
-        "like" -> Icons.Rounded.Favorite to "liked your post"
-        "repost" -> Icons.Rounded.Repeat to "reposted your post"
+        "like", "like-via-repost" -> Icons.Rounded.Favorite to "liked your post"
+        "repost", "repost-via-repost" -> Icons.Rounded.Repeat to "reposted your post"
         "follow" -> Icons.Rounded.PersonAdd to "followed you"
         "reply" -> Icons.Rounded.Edit to "replied"
         "mention" -> Icons.Rounded.Edit to "mentioned you"

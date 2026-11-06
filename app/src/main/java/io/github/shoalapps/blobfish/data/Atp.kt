@@ -177,10 +177,10 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         val requestAppView = store.settings.value.appView
         val namespace = (requestSession?.let { it.did + "|" + it.pds } ?: "public") + "|" + requestAppView
         val cacheKey = nsid + params.toSortedMap().toString()
-        if (method == "GET" && !Graph.offline.available()) return@withContext Graph.offline.cached(cacheKey, namespace)
         val s = if (auth) requestSession else null
         if (expectedOwner != null && s?.let { it.did + "|" + it.pds } != expectedOwner)
             throw AtpException(401, "This saved action belongs to another account")
+        if (method == "GET" && !Graph.offline.available()) return@withContext Graph.offline.cached(cacheKey, namespace)
         if (body?.get("repo") != null && body.str("repo") != s?.did)
             throw AtpException(401, "This saved action belongs to a different account")
         val host = s?.pds ?: if (method == "GET") requestAppView.ifBlank { Settings.BLUESKY_APPVIEW } else store.settings.value.server
@@ -462,8 +462,9 @@ class Atp(private val http: OkHttpClient, private val store: Store) {
         return Page(people, response.str("cursor"))
     }
 
-    suspend fun notifications(cursor: String? = null): Page<Notification> {
-        val o = call("GET", "app.bsky.notification.listNotifications", mapOf("limit" to "40", "cursor" to cursor))
+    suspend fun notifications(cursor: String?, reasons: List<String>, owner: String): Page<Notification> {
+        val o = call("GET", "app.bsky.notification.listNotifications", mapOf("limit" to "40", "cursor" to cursor, "reasons" to reasons.takeIf { it.isNotEmpty() }?.joinToString(MANY)),
+            expectedOwner = owner)
         val items = (o["notifications"] as? JsonArray).orEmpty().mapNotNull { e ->
             val n = e.obj ?: return@mapNotNull null
             Notification(
